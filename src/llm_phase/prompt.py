@@ -7,9 +7,24 @@ import sys
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set
 
-# Định vị thư mục chứa dữ liệu
+# Đảm bảo đường dẫn import cho cả chạy trực tiếp lẫn gọi từ module ngoài
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
-DATA_ROOT = PROJECT_ROOT / "train+public_test" / "train+public_test"
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
+# Import module xử lý công cụ riêng biệt
+try:
+    from src.llm_phase.get_tool import (
+        get_catalog,
+        get_available_tool,
+        DATA_ROOT
+    )
+except ImportError:
+    from get_tool import (
+        get_catalog,
+        get_available_tool,
+        DATA_ROOT
+    )
 
 
 SYSTEM_PROMPT = """Bạn là LifeMate - Trợ lý AI Voice-to-Action tiếng Việt thông minh trong hệ sinh thái ứng dụng số.
@@ -43,17 +58,8 @@ Nhiệm vụ của bạn là tiếp nhận yêu cầu bằng lời nói của ng
 
 
 # ---------------------------------------------------------------------------
-# 2. HÀM TẢI DỮ LIỆU TỪ DISK (CATALOG & SAMPLE)
+# 2. HÀM TẢI DỮ LIỆU SAMPLE TỪ DISK
 # ---------------------------------------------------------------------------
-def load_tools_catalog(split: str = "train") -> Dict[str, Any]:
-    """Tải catalog chứa schema chi tiết của toàn bộ tools trong split."""
-    catalog_path = DATA_ROOT / split / f"{split}_tools_catalog.json"
-    if not catalog_path.is_file():
-        raise FileNotFoundError(f"Không tìm thấy catalog tại: {catalog_path}")
-    with open(catalog_path, "r", encoding="utf-8") as f:
-        return json.load(f)
-
-
 def load_sample_by_id(sample_id: str, split: str = "train") -> Optional[Dict[str, Any]]:
     """Tìm và trả về dữ liệu của sample_id từ file <split>.jsonl."""
     jsonl_path = DATA_ROOT / split / f"{split}.jsonl"
@@ -72,91 +78,16 @@ def load_sample_by_id(sample_id: str, split: str = "train") -> Optional[Dict[str
 
 
 # ---------------------------------------------------------------------------
-# 3. KẾT NỐI INSTALLED_APPS VỚI TOOLS_CATALOG (LUÔN CÓ SYS.ASK_MISSING_INFO)
-# ---------------------------------------------------------------------------
-def get_allowed_tool_names(context: Dict[str, Any]) -> Set[str]:
-    """Lấy danh sách các tool được phép gọi từ installed_apps.
-    LƯU Ý: Luôn mặc định bổ sung 'sys.ask_missing_info' cho mọi sample.
-    """
-    installed_apps = context.get("installed_apps", {})
-    allowed_tools = set()
-
-    # 1. Quét toàn bộ tool của các app đã cài
-    for app_name, app_info in installed_apps.items():
-        for tool_name in app_info.get("tools", []):
-            allowed_tools.add(tool_name)
-
-    # 2. Mặc định luôn luôn thêm sys.ask_missing_info
-    allowed_tools.add("sys.ask_missing_info")
-    return allowed_tools
-
-
-def clean_parameters_for_ollama(params: Dict[str, Any]) -> Dict[str, Any]:
-    """Làm sạch schema tham số để tương thích 100% với JSON Schema chuẩn của Ollama.
-    Loại bỏ các trường tùy biến riêng của cuộc thi như x-one-of, x-ref, x-match.
-    """
-    cleaned: Dict[str, Any] = {
-        "type": params.get("type", "object"),
-        "properties": {}
-    }
-    if "required" in params and isinstance(params["required"], list):
-        cleaned["required"] = params["required"]
-
-    for p_name, p_val in params.get("properties", {}).items():
-        if isinstance(p_val, dict):
-            prop = {}
-            # Chỉ giữ lại các trường chuẩn theo chuẩn JSON Schema
-            for key in ["type", "description", "enum", "items", "minimum", "exclusiveMinimum", "format"]:
-                if key in p_val:
-                    prop[key] = p_val[key]
-            cleaned["properties"][p_name] = prop
-        else:
-            cleaned["properties"][p_name] = p_val
-
-    return cleaned
-
-
-def get_sample_tool_schemas(
-    sample: Dict[str, Any],
-    catalog: Dict[str, Any]
-) -> List[Dict[str, Any]]:
-    """Trích xuất JSON Schema chi tiết từ catalog cho các tool mà sample được phép dùng.
-    Trả về định dạng Function Calling chuẩn hóa cho Ollama.
-    """
-    allowed_tool_names = get_allowed_tool_names(sample.get("context", {}))
-    openai_tools = []
-
-    # Quét qua catalog của BTC để lấy mô tả và parameters chuẩn
-    for app in catalog.get("apps", []):
-        for tool in app.get("tools", []):
-            name = tool.get("name")
-            if name in allowed_tool_names:
-                raw_params = tool.get("parameters", {"type": "object", "properties": {}})
-                clean_params = clean_parameters_for_ollama(raw_params)
-                
-                openai_tool = {
-                    "type": "function",
-                    "function": {
-                        "name": name,
-                        "description": tool.get("description", ""),
-                        "parameters": clean_params
-                    }
-                }
-                openai_tools.append(openai_tool)
-
-    return openai_tools
-
-
-# ---------------------------------------------------------------------------
-# 4. HÀM DỰNG USER PROMPT TỪ NGỮ CẢNH CỦA SAMPLE
+# 3. HÀM DỰNG USER PROMPT TỪ NGỮ CẢNH CỦA SAMPLE
 # ---------------------------------------------------------------------------
 def build_user_prompt(
     sample: Dict[str, Any],
-    include_tool_descriptions: bool = True,
-    catalog: Optional[Dict[str, Any]] = None
+    *args,
+    **kwargs
 ) -> str:
     """Ghép nối ngữ cảnh người dùng (User Context) và lời nói thành Prompt hoàn chỉnh.
-    Nếu include_tool_descriptions=True: Nhúng bản tóm tắt chức năng tool vào Prompt.
+    LƯU Ý: Tuyệt đối không nhồi nhét danh sách tools vào đây vì đã được truyền
+    qua tham số 'tools' của Ollama payload để tránh thừa thông tin và token.
     """
     context = sample.get("context", {})
 
@@ -166,29 +97,6 @@ def build_user_prompt(
     timezone = context.get("timezone", "")
     history = sample.get("history", [])
     audio_text = sample.get("audio_text", "")
-
-    # Tóm tắt các công cụ khả dụng kèm mô tả từ catalog
-    allowed_tools = get_allowed_tool_names(context)
-    tool_desc_lines = []
-
-    if include_tool_descriptions and catalog:
-        # Tra cứu mô tả từ catalog
-        for app in catalog.get("apps", []):
-            for tool in app.get("tools", []):
-                t_name = tool.get("name")
-                if t_name in allowed_tools:
-                    desc = tool.get("description", "Không có mô tả")
-                    req = tool.get("parameters", {}).get("required", [])
-                    req_str = f" [Bắt buộc: {', '.join(req)}]" if req else ""
-                    tool_desc_lines.append(f"  - `{t_name}`: {desc}{req_str}")
-        tools_summary = "\n".join(tool_desc_lines)
-    else:
-        # Chỉ liệt kê tên công cụ
-        installed_apps = context.get("installed_apps", {})
-        for app_name, app_info in installed_apps.items():
-            tool_desc_lines.append(f"  + Ứng dụng '{app_name}': {', '.join(app_info.get('tools', []))}")
-        tool_desc_lines.append("  + Hệ thống: sys.ask_missing_info")
-        tools_summary = "\n".join(tool_desc_lines)
 
     # Lịch sử hội thoại trước đó (nếu có)
     if history:
@@ -205,21 +113,18 @@ def build_user_prompt(
   + Nơi làm việc: {user_profile.get('work_address', 'N/A')}
   + Thành phố: {user_profile.get('city', 'N/A')}
 
-### CÁC CÔNG CỤ ĐƯỢC PHÉP SỬ DỤNG (Available Tools):
-{tools_summary}
-
 ### LỊCH SỬ HỘI THOẠI TRƯỚC ĐÓ:
 {history_text}
 
 ### YÊU CẦU MỚI NHẤT CỦA NGƯỜI DÙNG:
 "{audio_text}"
 
-Dựa trên bối cảnh thời gian thực, thông tin cá nhân và chức năng của các công cụ khả dụng ở trên, hãy phân tích và đưa ra công cụ (tool call) tiếp theo cần thực thi."""
+Dựa trên bối cảnh thời gian thực, thông tin cá nhân và yêu cầu của người dùng ở trên, hãy phân tích và đưa ra công cụ (tool call) tiếp theo cần thực thi."""
     return prompt
 
 
 # ---------------------------------------------------------------------------
-# 5. HÀM TẠO GÓI PAYLOAD HOÀN CHỈNH CHO OLLAMA (MESSAGES + TOOLS)
+# 4. HÀM TẠO GÓI PAYLOAD HOÀN CHỈNH CHO OLLAMA (MESSAGES + TOOLS)
 # ---------------------------------------------------------------------------
 def build_ollama_payload(sample_id: str, split: str = "train", model: str = "qwen2.5:3b") -> Dict[str, Any]:
     """Tạo toàn bộ payload JSON gồm messages và tools theo chuẩn Native Ollama API (/api/chat)."""
@@ -227,9 +132,9 @@ def build_ollama_payload(sample_id: str, split: str = "train", model: str = "qwe
     if not sample:
         raise ValueError(f"Không tìm thấy mẫu {sample_id} trong {split}.jsonl")
 
-    catalog = load_tools_catalog(split=split)
-    tools_schema = get_sample_tool_schemas(sample, catalog)
-    user_prompt = build_user_prompt(sample, include_tool_descriptions=True, catalog=catalog)
+    catalog = get_catalog(split=split)
+    tools_schema = get_available_tool(sample.get("context", {}), tool_catalog=catalog)
+    user_prompt = build_user_prompt(sample)
 
     messages = [
         {"role": "system", "content": SYSTEM_PROMPT},
@@ -245,39 +150,3 @@ def build_ollama_payload(sample_id: str, split: str = "train", model: str = "qwe
         },
         "stream": False
     }
-
-
-# ---------------------------------------------------------------------------
-# 6. CHẠY THỬ VÀ IN RA ĐỂ KIỂM TRA
-# ---------------------------------------------------------------------------
-if __name__ == "__main__":
-    target_id = sys.argv[1] if len(sys.argv) > 1 else "train_0001"
-
-    print("=" * 80)
-    print(f"   KIỂM TRA DỰNG PROMPT & TOOL SCHEMAS CHO SAMPLE ID: {target_id}")
-    print("=" * 80)
-
-    sample_data = load_sample_by_id(target_id)
-    if not sample_data:
-        print(f"❌ Không tìm thấy mẫu có id = {target_id}")
-        sys.exit(1)
-
-    catalog_data = load_tools_catalog("train")
-    allowed = get_allowed_tool_names(sample_data.get("context", {}))
-    tools_schema = get_sample_tool_schemas(sample_data, catalog_data)
-
-    print(f"\n[1] DANH SÁCH TOOLS KHẢ DỤNG: Tổng cộng {len(allowed)} tools")
-    print(f"    -> Đã bao gồm 'sys.ask_missing_info': {'sys.ask_missing_info' in allowed}")
-
-    print("\n" + "#" * 35 + " 2. USER PROMPT (ĐÃ KÈM MÔ TẢ TOOL TỪ CATALOG) " + "#" * 35)
-    user_prompt_text = build_user_prompt(sample_data, include_tool_descriptions=True, catalog=catalog_data)
-    print(user_prompt_text)
-
-    print("\n" + "#" * 30 + " 3. MẪU SCHEMA OPENAI TOOL (GỬI QUA API) " + "#" * 30)
-    # In ví dụ 2 tool đầu tiên và sys.ask_missing_info để kiểm tra
-    sample_preview = [t for t in tools_schema if t["function"]["name"] in ["weather.get_forecast", "sys.ask_missing_info"]]
-    print(json.dumps(sample_preview, ensure_ascii=False, indent=2))
-
-    print("\n" + "#" * 30 + " 4. ĐÁP ÁN CHUẨN CỦA MẪU (LABEL) " + "#" * 30)
-    label = sample_data.get("label", {})
-    print(f"- Tool calls mong đợi: {json.dumps(label.get('tool_calls', []), ensure_ascii=False, indent=2)}")

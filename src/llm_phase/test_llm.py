@@ -1,8 +1,3 @@
-"""Test LLM Agent với vòng lặp Thought - Action - Observe trên một sample_id cụ thể.
-Giao tiếp TRỰC TIẾP qua Native Ollama API (http://localhost:11434/api/chat).
-Không phụ thuộc OpenAI-compatible endpoint.
-Đầu ra chuẩn định dạng nộp bài và chấm điểm của cuộc thi ZAC 2026.
-"""
 import argparse
 import json
 import re
@@ -19,10 +14,12 @@ sys.path.insert(0, str(PROJECT_ROOT))
 from src.llm_phase.prompt import (
     SYSTEM_PROMPT,
     load_sample_by_id,
-    load_tools_catalog,
-    get_sample_tool_schemas,
     build_user_prompt,
     DATA_ROOT
+)
+from src.llm_phase.get_tool import (
+    get_catalog,
+    get_available_tool
 )
 
 # Nạp ToolEnv từ zaic_tools
@@ -30,7 +27,7 @@ SPLIT = "train"
 sys.path.insert(0, str(DATA_ROOT / SPLIT))
 from zaic_tools import ToolEnv
 
-
+    
 # ---------------------------------------------------------------------------
 # HÀM KIỂM TRA MODEL TRONG OLLAMA (NATIVE API: GET /api/tags)
 # ---------------------------------------------------------------------------
@@ -158,15 +155,12 @@ def call_native_ollama_chat(
 def print_messages_state(messages: List[Dict[str, Any]]):
     """In ra toàn bộ danh sách messages hiện tại để kiểm tra cấu trúc gửi cho model."""
     print("\n" + "-" * 75)
-    print(f"📋 [KIỂM TRA INPUT MESSAGES HIỆN TẠI (Tổng số {len(messages)} tin nhắn)]:")
+    print(f"KIỂM TRA INPUT MESSAGES HIỆN TẠI: ")
     for idx, msg in enumerate(messages):
         role = msg.get("role", "").upper()
         content = msg.get("content") or ""
-        if len(content) > 300:
-            preview = content[:250].strip() + "\n      ... [đã ẩn bớt để dễ nhìn] ..."
-        else:
-            preview = content.strip()
-            
+        preview = content.strip()
+                
         print(f"  [{idx}] ROLE: {role}")
         if preview:
             print(f"      Nội dung: {preview}")
@@ -180,7 +174,7 @@ def print_messages_state(messages: List[Dict[str, Any]]):
 # ---------------------------------------------------------------------------
 def run_agent_loop(
     sample_id: str,
-    model_name: str = "qwen2.5:3b",
+    model_name: str,
     ollama_host: str = "http://localhost:11434",
     num_ctx: int = 16384,
     max_turns: int = 8
@@ -205,23 +199,23 @@ def run_agent_loop(
             print(f"  Gợi ý: truyền cờ --model {installed_models[0]}")
             print("!" * 75 + "\n")
 
-    # 1. Tải sample và catalog
+    # 1. Tải sample và catalog (catalog được cache trong get_tool)
     sample = load_sample_by_id(sample_id, split=SPLIT)
     if not sample:
         raise ValueError(f"Không tìm thấy mẫu {sample_id} trong tập {SPLIT}!")
 
-    catalog = load_tools_catalog(split=SPLIT)
-    tools_schema = get_sample_tool_schemas(sample, catalog)
+    catalog = get_catalog(split=SPLIT)
+    tools_schema = get_available_tool(sample.get("context", {}), tool_catalog=catalog)
     print(f"✔ Đã nạp mẫu: \"{sample.get('audio_text')}\"")
     print(f"✔ Số lượng tools khả dụng được cấp phép: {len(tools_schema)} tools (luôn kèm sys.ask_missing_info)")
-
+    # print(tools_schema)
+    
     # 2. Khởi tạo môi trường ToolEnv (In-memory Sandbox)
     env = ToolEnv(SPLIT, sample_id, root=DATA_ROOT)
     print(f"✔ Khởi tạo ToolEnv thành công. State Hash ban đầu: {env.get_state_hash()[:16]}...")
 
-    # 3. Khởi tạo hội thoại Messages
-    # include_tool_descriptions=False để tránh trùng lặp vì Ollama đã nhận schema đầy đủ qua tham số tools
-    user_prompt = build_user_prompt(sample, include_tool_descriptions=False, catalog=catalog)
+    # 3. Khởi tạo hội thoại Messages (user_prompt chỉ chứa bối cảnh người dùng, không lặp lại tool)
+    user_prompt = build_user_prompt(sample)
     messages = [
         {"role": "system", "content": SYSTEM_PROMPT},
         {"role": "user", "content": user_prompt}
