@@ -1,0 +1,10 @@
+# Môi trường mặc định: PhoWhisper / Whisper / Nemotron ASR.
+# Cài PyTorch trước, đúng phiên bản CUDA của máy: https://pytorch.org
+#   GPU RTX 50xx (Blackwell) cần CUDA >= 12.8:
+#   pip install torch --index-url https://download.pytorch.org/whl/cu128
+numpy>=1.26
+soundfile>=0.12
+transformers>=5.13    # AutoModelForRNNT (Nemotron) cần >= 5.13
+accelerate>=1.0
+librosa>=0.10         # bộ trích đặc trưng của Nemotron ASR
+pytest>=8.0           # chạy test của module

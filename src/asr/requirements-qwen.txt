@@ -1,0 +1,7 @@
+# Môi trường riêng cho Qwen3-ASR (chỉ cần nếu dùng --model qwen3_asr_*).
+# qwen-asr ghim phiên bản transformers riêng, xung đột với requirements.txt,
+# nên phải cài trong một virtual environment khác.
+numpy>=1.26
+soundfile>=0.12
+qwen-asr
+pytest>=8.0
