@@ -149,24 +149,23 @@ def call_native_ollama_chat(
         )
 
 
-# ---------------------------------------------------------------------------
-# IN ĐỊNH DẠNG MESSAGES ĐỂ USER THEO DÕI
-# ---------------------------------------------------------------------------
-def print_messages_state(messages: List[Dict[str, Any]]):
-    """In ra toàn bộ danh sách messages hiện tại để kiểm tra cấu trúc gửi cho model."""
-    print("\n" + "-" * 75)
-    print(f"KIỂM TRA INPUT MESSAGES HIỆN TẠI: ")
-    for idx, msg in enumerate(messages):
-        role = msg.get("role", "").upper()
-        content = msg.get("content") or ""
-        preview = content.strip()
-                
-        print(f"  [{idx}] ROLE: {role}")
-        if preview:
-            print(f"      Nội dung: {preview}")
-        if "tool_calls" in msg:
-            print(f"      Tool calls: {json.dumps(msg['tool_calls'], ensure_ascii=False)}")
-    print("-" * 75)
+def save_result(result: Dict[str, Any], result_path: Optional[Path] = None) -> None:
+    """Append one run to the JSON array at result/test_llm.json."""
+    path = result_path or PROJECT_ROOT / "result" / "test_llm.json"
+    path.parent.mkdir(parents=True, exist_ok=True)
+
+    if path.exists():
+        with path.open("r", encoding="utf-8") as file:
+            results = json.load(file)
+        if not isinstance(results, list):
+            raise ValueError(f"File kết quả phải chứa một JSON array: {path}")
+    else:
+        results = []
+
+    results.append(result)
+    with path.open("w", encoding="utf-8") as file:
+        json.dump(results, file, ensure_ascii=False, indent=2)
+        file.write("\n")
 
 
 # ---------------------------------------------------------------------------
@@ -179,25 +178,12 @@ def run_agent_loop(
     num_ctx: int = 16384,
     max_turns: int = 8
 ) -> Dict[str, Any]:
-    print("=" * 80)
-    print(f"🚀 BẮT ĐẦU CHẠY AGENT (NATIVE OLLAMA API: /api/chat)")
-    print(f"   - Sample ID   : {sample_id}")
-    print(f"   - Model       : {model_name}")
-    print(f"   - Context size: {num_ctx} tokens")
-    print(f"   - Endpoint    : {ollama_host.rstrip('/')}/api/chat")
-    print("=" * 80)
+    run_start_time = time.perf_counter()
 
     # 0. Kiểm tra danh sách model đang có trong Ollama
     installed_models = check_ollama_models(ollama_host)
     if installed_models:
-        print(f"✔ Ollama đang chạy. Các model có sẵn trên máy: {installed_models}")
         found = any(model_name == m or model_name in m or m in model_name for m in installed_models)
-        if not found:
-            print("\n" + "!" * 75)
-            print(f"⚠ [CẢNH BÁO]: Model '{model_name}' chưa có trong danh sách model của Ollama!")
-            print(f"  Các model hiện có: {installed_models}")
-            print(f"  Gợi ý: truyền cờ --model {installed_models[0]}")
-            print("!" * 75 + "\n")
 
     # 1. Tải sample và catalog (catalog được cache trong get_tool)
     sample = load_sample_by_id(sample_id, split=SPLIT)
@@ -206,13 +192,9 @@ def run_agent_loop(
 
     catalog = get_catalog(split=SPLIT)
     tools_schema = get_available_tool(sample.get("context", {}), tool_catalog=catalog)
-    print(f"✔ Đã nạp mẫu: \"{sample.get('audio_text')}\"")
-    print(f"✔ Số lượng tools khả dụng được cấp phép: {len(tools_schema)} tools (luôn kèm sys.ask_missing_info)")
-    # print(tools_schema)
     
     # 2. Khởi tạo môi trường ToolEnv (In-memory Sandbox)
     env = ToolEnv(SPLIT, sample_id, root=DATA_ROOT)
-    print(f"✔ Khởi tạo ToolEnv thành công. State Hash ban đầu: {env.get_state_hash()[:16]}...")
 
     # 3. Khởi tạo hội thoại Messages (user_prompt chỉ chứa bối cảnh người dùng, không lặp lại tool)
     user_prompt = build_user_prompt(sample)
@@ -222,24 +204,19 @@ def run_agent_loop(
     ]
 
     turn = 0
+    thoughts: List[Dict[str, Any]] = []
+    tool_calls: List[Dict[str, Any]] = []
+    tool_results: List[Dict[str, Any]] = []
     # 4. Vòng lặp suy luận từng bước (Thought - Action - Observe)
     while turn < max_turns:
         turn += 1
-        print(f"\n{'#'*30} [LƯỢT SUY LUẬN {turn}/{max_turns}] {'#'*30}")
-
-        # In danh sách messages được đưa vào model để user kiểm tra
-        print_messages_state(messages)
 
         # Gửi request sang Native Ollama API
-        print(f"\n⏳ Đang gửi request sang Native Ollama API (/api/chat, model={model_name}, num_ctx={num_ctx})...")
-        start_time = time.time()
         try:
             bot_msg = call_native_ollama_chat(ollama_host, model_name, messages, tools_schema, num_ctx=num_ctx)
         except Exception as e:
             print(f"\n❌ [LỖI GỌI MODEL]: {e}")
             sys.exit(1)
-        elapsed = time.time() - start_time
-        print(f"✔ Nhận phản hồi sau {elapsed:.2f}s")
 
         thought = bot_msg.get("content") or bot_msg.get("thinking") or ""
         tool_name, tool_args = extract_single_tool_call(bot_msg)
@@ -248,27 +225,25 @@ def run_agent_loop(
         if thought.strip():
             # Xử lý nếu mô hình dùng thẻ <think>...</think>
             clean_thought = re.sub(r"</?think>", "", thought).strip()
-            print(f"\n🧠 [THOUGHT - Suy luận của Model]:\n{clean_thought}")
         else:
-            print(f"\n🧠 [THOUGHT - Suy luận của Model]: (Mô hình chọn trực tiếp công cụ '{tool_name}' dựa trên bối cảnh hiện tại)")
+            clean_thought = ""
+        thoughts.append({"turn": turn, "content": clean_thought})
 
         # BƯỚC 2: ACTION (Hành động gọi tool)
         # Nếu model không gọi tool nào -> Tác vụ đã xong hoặc Ngoài phạm vi
         if not tool_name:
-            print("\n🛑 [ACTION]: Model không gọi tool nào -> Hoàn tất tác vụ hoặc ngoài phạm vi.")
             break
 
-        print(f"\n⚡ [ACTION - Tool Call]:")
-        print(f"   - Tool Name : {tool_name}")
-        print(f"   - Arguments : {json.dumps(tool_args, ensure_ascii=False)}")
+        tool_call = {"name": tool_name, "arguments": tool_args}
+        tool_calls.append(tool_call)
 
         # Lưu ý: Model KHÔNG ĐƯỢC PHÉP tự bịa ra kết quả quan sát! Dừng suy luận tại đây và để Env thực thi.
         
         # BƯỚC 3: OBSERVE (Môi trường ToolEnv thực thi và trả kết quả thật)
         # Trường hợp gọi sys.ask_missing_info: thực thi và kết thúc lượt
         if tool_name == "sys.ask_missing_info":
-            print("❗ Phát hiện thông tin còn thiếu -> Gọi sys.ask_missing_info và dừng.")
-            env.call(tool_name, tool_args)
+            obs_result = env.call(tool_name, tool_args)
+            tool_results.append(obs_result)
             break
 
         # Kiểm tra tính hợp lệ trước khi thực thi
@@ -278,8 +253,7 @@ def run_agent_loop(
 
         # Thực thi thật trên ToolEnv
         obs_result = env.call(tool_name, tool_args)
-        print(f"\n👁 [OBSERVE - Kết quả thực tế từ Ứng dụng]:")
-        print(f"   {json.dumps(obs_result, ensure_ascii=False)}")
+        tool_results.append(obs_result)
 
         # BƯỚC 4: APPEND KẾT QUẢ VÀO MESSAGES CHO LƯỢT TIẾP THEO (CHUẨN NATIVE OLLAMA)
         # Thêm lượt Assistant (chứa tool_calls chuẩn Ollama)
@@ -302,7 +276,6 @@ def run_agent_loop(
 
         # Nếu tool trả về lỗi không thể tiếp tục
         if not obs_result.get("ok", True):
-            print("🛑 [DỪNG]: Tool trả về lỗi nghiêm trọng.")
             break
 
     # ---------------------------------------------------------------------------
@@ -314,27 +287,32 @@ def run_agent_loop(
         "state_hash": env.get_state_hash()
     }
 
-    print("\n" + "=" * 80)
-    print("                    KẾT QUẢ CUỐI CÙNG (FORMAT CHẤM ĐIỂM)")
-    print("=" * 80)
-    print(json.dumps(final_output, ensure_ascii=False, indent=2))
-
     # Đối chiếu với Gold Label (nếu có trong train.jsonl)
     gold_label = sample.get("label")
+    state_hash_label = None
+    state_hash_result = None
     if gold_label:
-        print("\n" + "-" * 80)
-        print("🎯 [ĐỐI CHIẾU VỚI GROUND TRUTH / LABEL CHUẨN]:")
-        print(f"- Số tool calls thực tế: {len(final_output['tool_calls'])} | Chuẩn: {len(gold_label.get('tool_calls', []))}")
-        print(f"- Tool calls dự đoán : {[c['name'] for c in final_output['tool_calls']]}")
-        print(f"- Tool calls chuẩn   : {[c['name'] for c in gold_label.get('tool_calls', [])]}")
-        print("-" * 80)
+        label_env = ToolEnv(SPLIT, sample_id, root=DATA_ROOT)
+        for label_call in gold_label.get("tool_calls", []):
+            label_env.call(label_call.get("name", ""), label_call.get("arguments") or {})
+        state_hash_label = label_env.get_state_hash()
+        state_hash_result = final_output["state_hash"] == state_hash_label
+
+    save_result({
+        "id": sample_id,
+        "user_request": sample.get("audio_text", ""),
+        "thought": thoughts,
+        "tool_calls": tool_calls,
+        "tool_results": tool_results,
+        "tool_expect": (gold_label or {}).get("tool_calls", []),
+        "state_hash": final_output["state_hash"],
+        "state_hash_label": state_hash_label,
+        "state_hash_result": state_hash_result,
+        "time_infer_second": round(time.perf_counter() - run_start_time, 1)
+    })
 
     return final_output
 
-
-# ---------------------------------------------------------------------------
-# ĐIỂM BẮT ĐẦU CHẠY
-# ---------------------------------------------------------------------------
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="LifeMate Phase 3: Test Native Ollama Agent")
     parser.add_argument("--id", default="train_0001", help="Sample ID cần test (ví dụ: train_0001, train_0019, train_0025)")
