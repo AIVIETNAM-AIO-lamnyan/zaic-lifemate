@@ -31,3 +31,6 @@ Audio (.wav) -> [ASR Module] -> Văn bản -> [ReAct Agent LLM] -> [ToolEnv] -> 
   ```
 - Kết quả được ghi tự động vào: `/result/submission.jsonl`.
 
+
+# zaic-lifemate
+Zalo AI challenge 2026, track 1: Lifemate. Create an AI agent that can help you handle tasks in reallife
