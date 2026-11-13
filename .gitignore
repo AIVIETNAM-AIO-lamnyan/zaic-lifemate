@@ -160,5 +160,8 @@ jira/
 docs/workplan.md
 docs/tasks/
 
+# Keep the primary Dockerfile tracked; ignore task-specific variants.
+[Dd]ockerfile.*
+
 
 

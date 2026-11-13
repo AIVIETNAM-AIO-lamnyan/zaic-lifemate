@@ -9,15 +9,19 @@ from typing import Any, Dict, List, Optional, Set, Union
 
 # Định vị thư mục chứa dữ liệu
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
-DATA_ROOT = PROJECT_ROOT / "train+public_test" / "train+public_test"
+_candidate_root = PROJECT_ROOT / "train+public_test"
+if (_candidate_root / "train+public_test").is_dir():
+    DATA_ROOT = _candidate_root / "train+public_test"
+elif (_candidate_root / "train").is_dir():
+    DATA_ROOT = _candidate_root
+elif Path("/data").is_dir():
+    DATA_ROOT = Path("/data")
+else:
+    DATA_ROOT = _candidate_root
 
 # Cache lưu trữ Tool Catalog trong bộ nhớ (Singleton pattern theo split)
 _CATALOG_CACHE: Dict[str, Dict[str, Any]] = {}
 
-
-# ---------------------------------------------------------------------------
-# 1. HÀM NẠP VÀ CACHE TOOL CATALOG (KHỞI TẠO 1 LẦN)
-# ---------------------------------------------------------------------------
 def get_catalog(
     split: str = "train",
     data_root: Optional[Path] = None,
@@ -56,9 +60,6 @@ def get_catalog(
 get_tool_catalog = get_catalog
 
 
-# ---------------------------------------------------------------------------
-# HÀM BỔ TRỢ: LÀM SẠCH JSON SCHEMA CHO OLLAMA FUNCTION CALLING
-# ---------------------------------------------------------------------------
 def _clean_parameters(params: Dict[str, Any]) -> Dict[str, Any]:
     """Làm sạch schema tham số để tương thích 100% với JSON Schema chuẩn của Ollama.
     Loại bỏ các trường tùy biến riêng của cuộc thi như x-one-of, x-ref, x-match.
@@ -83,9 +84,6 @@ def _clean_parameters(params: Dict[str, Any]) -> Dict[str, Any]:
     return cleaned
 
 
-# ---------------------------------------------------------------------------
-# 2. HÀM LỌC VÀ TẠO TOOL SCHEMAS CHO PAYLOAD OLLAMA
-# ---------------------------------------------------------------------------
 def get_available_tool(
     installed_apps: Union[Dict[str, Any], Any],
     tool_catalog: Optional[Dict[str, Any]] = None,
