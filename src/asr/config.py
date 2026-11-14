@@ -1,9 +1,13 @@
 """Cấu hình của module ASR: danh sách model và đường dẫn dữ liệu.
 
-Model mặc định là **PhoWhisper-large**, được chọn qua benchmark trên toàn bộ
-5.036 lượt nói có nhãn của tập train (WER 24,69 %, thấp nhất trong 7 model
-mã nguồn mở đã thử). Các model còn lại được giữ trong ``MODELS`` để có thể
-đổi model chỉ bằng một tham số, ví dụ ``model="qwen3_asr_1_7b"``.
+Model mặc định là **Gipformer 1.5 (68M, Zipformer RNN-T) đã fine-tune** trên
+tập train (``gipformer_finetune``, cấu hình ft06: nhiễu trắng + SpecAugment),
+giải mã beam search 4 + hotword lấy từ lịch sử hội thoại, chạy ONNX trên
+CPU. Trên 200 hội thoại validation (không dùng để train): WER 6,86 %
+(Gipformer gốc 14,1 %, PhoWhisper-large ~25 %), nghe đúng 86 % tên riêng.
+Các model còn lại được giữ trong ``MODELS`` để có thể đổi model chỉ bằng
+một tham số, ví dụ
+``model="phowhisper_large"``.
 """
 
 from __future__ import annotations
@@ -19,13 +23,35 @@ SAMPLE_RATE = 16000
 # Thư mục gốc của repo: src/asr/config.py -> lùi 3 cấp.
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
-# Thư mục chứa các split (train/, public_test/, ...). Mặc định trùng với quy
-# ước của src/llm_phase; có thể ghi đè bằng biến môi trường ZAC_DATA_ROOT
-# (ví dụ khi đóng gói Docker, dữ liệu được mount ở chỗ khác).
-DATA_ROOT = Path(os.environ.get(
-    "ZAC_DATA_ROOT",
+# Các vị trí dữ liệu thường gặp, theo thứ tự ưu tiên: quy ước của repo team
+# (src/llm_phase) rồi tới bố cục data/zac2026 của repo cá nhân.
+_DATA_CANDIDATES = (
     PROJECT_ROOT / "train+public_test" / "train+public_test",
-))
+    PROJECT_ROOT / "data" / "zac2026",
+)
+
+# Thư mục chứa các split (train/, public_test/, ...). Biến môi trường
+# ZAC_DATA_ROOT luôn được ưu tiên (ví dụ khi đóng gói Docker, dữ liệu được
+# mount ở chỗ khác); nếu không có thì lấy vị trí đầu tiên tồn tại.
+DATA_ROOT = Path(os.environ.get("ZAC_DATA_ROOT") or next(
+    (path for path in _DATA_CANDIDATES if path.is_dir()), _DATA_CANDIDATES[0]))
+
+
+# Model fine-tune được lưu ở đây (thư mục checkpoints/ đã nằm trong
+# .gitignore: trọng số không được đưa lên git).
+# Ghi đè bằng biến môi trường ZAC_FINETUNED_DIR nếu model nằm ở chỗ khác.
+FINETUNED_DIR = Path(os.environ.get(
+    "ZAC_FINETUNED_DIR",
+    PROJECT_ROOT / "checkpoints" / "asr" / "phowhisper-large-zac"))
+
+
+# Model Gipformer đã fine-tune (thư mục ONNX: encoder/decoder/joiner.onnx,
+# tokens.txt, bpe.model). Có thể là đường dẫn thư mục trên máy, hoặc id repo
+# Hugging Face (tự tải lần đầu). Ghi đè bằng biến môi trường
+# ZAC_GIPFORMER_MODEL.
+GIPFORMER_MODEL = os.environ.get(
+    "ZAC_GIPFORMER_MODEL",
+    str(PROJECT_ROOT / "checkpoints" / "asr" / "gipformer1.5-zac-ft06"))
 
 
 @dataclass(frozen=True)
@@ -52,10 +78,22 @@ class ModelSpec:
     options: dict[str, Any] = field(default_factory=dict)
 
 
-# Danh sách model đã benchmark, xếp theo WER tăng dần trên tập train.
+# Danh sách model đã benchmark.
 _SPECS = (
+    # Gipformer fine-tune: beam search 4 + hotword (điểm 1,0, chọn trên dev),
+    # 4 luồng CPU.
+    # Cấu hình chọn trên validation (gipformer_finetune/DECISIONS.md mục 14).
+    ModelSpec("gipformer_zac", GIPFORMER_MODEL, "sherpa_onnx", batch_size=32,
+              options={"decoding_method": "modified_beam_search",
+                       "max_active_paths": 4, "hotwords_score": 1.0,
+                       "num_threads": 4}),
     # PhoWhisper chỉ được fine-tune trên tiếng Việt: không cần gợi ý ngôn ngữ.
     ModelSpec("phowhisper_large", "vinai/PhoWhisper-large", "hf_whisper"),
+    # PhoWhisper-large đã fine-tune LoRA trên tập train (src/asr/finetune).
+    # Nhãn khi học có prefix <|vi|>, nên khi nhận dạng cũng chỉ định tiếng
+    # Việt cho khớp.
+    ModelSpec("phowhisper_large_zac", str(FINETUNED_DIR), "hf_whisper",
+              language="vietnamese"),
     ModelSpec("qwen3_asr_1_7b", "Qwen/Qwen3-ASR-1.7B", "qwen_asr",
               language="Vietnamese", options={"max_new_tokens": 256}),
     ModelSpec("whisper_large_v3", "openai/whisper-large-v3", "hf_whisper",
@@ -74,4 +112,4 @@ _SPECS = (
 MODELS: dict[str, ModelSpec] = {spec.key: spec for spec in _SPECS}
 
 #: Model được dùng khi người gọi không chỉ định.
-DEFAULT_MODEL = "phowhisper_large"
+DEFAULT_MODEL = "gipformer_zac"

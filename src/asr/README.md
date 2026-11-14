@@ -10,6 +10,12 @@ audio (WAV 16 kHz) ──► src/asr ──► (current_req, history_req) ──
 Toàn bộ phần ASR nằm trong thư mục này và không phụ thuộc vào module nào khác
 của repo.
 
+> **Cập nhật 14/11/2026: model mặc định đổi sang Gipformer fine-tune
+> (`gipformer_zac`).** Interface `get_user_request_from_audio` giữ nguyên. Xem
+> [`QUICKSTART_GIPFORMER.md`](QUICKSTART_GIPFORMER.md) để cài đặt và chạy
+> nhanh. Các phần dưới đây mô tả thiết kế chung; số liệu và hướng dẫn
+> PhoWhisper vẫn đúng khi chọn `model="phowhisper_large"`.
+
 ---
 
 ## Mục lục
@@ -21,8 +27,9 @@ của repo.
 5. [Chạy thử và kiểm thử](#5-chạy-thử-và-kiểm-thử)
 6. [Lựa chọn model](#6-lựa-chọn-model)
 7. [Thiết kế](#7-thiết-kế)
-8. [Cấu trúc thư mục](#8-cấu-trúc-thư-mục)
-9. [Xử lý lỗi thường gặp](#9-xử-lý-lỗi-thường-gặp)
+8. [Fine-tune PhoWhisper](#8-fine-tune-phowhisper)
+9. [Cấu trúc thư mục](#9-cấu-trúc-thư-mục)
+10. [Xử lý lỗi thường gặp](#10-xử-lý-lỗi-thường-gặp)
 
 ---
 
@@ -247,7 +254,61 @@ PhoWhisper-large chiếm 1,54B, nên phần còn lại cho LLM vào khoảng 4,4
 
 ---
 
-## 8. Cấu trúc thư mục
+## 8. Fine-tune PhoWhisper
+
+PhoWhisper-large được VinAI fine-tune từ Whisper, nên dùng chung kiến trúc
+`WhisperForConditionalGeneration`. Thư mục `finetune/` học tiếp model này
+trên tập train của cuộc thi bằng **LoRA**: chỉ học khoảng 2 % tham số (31,5 triệu), vừa
+với GPU 8 GB. Fine-tune toàn bộ model sẽ cần khoảng 20-25 GB VRAM.
+
+### Bước 1: Kiểm tra weights khớp kiến trúc Whisper
+
+```bash
+python -m src.asr.finetune.check_weights
+```
+
+Script chạy 4 bước kiểm tra: (1) cấu hình so với `whisper-large-v2/v3`,
+(2) nạp vào `WhisperForConditionalGeneration` không thiếu, thừa hay lệch
+tensor nào, (3) từng tensor cùng tên và kích thước với bộ khung Whisper,
+(4) học thử LoRA vài bước, loss phải giảm. Báo cáo được ghi vào
+`results/asr/weights_check_vinai_PhoWhisper-large.md`.
+
+### Bước 2: Fine-tune
+
+```bash
+python -m src.asr.finetune.train --epochs 1 --limit 200   # chạy thử nhanh
+python -m src.asr.finetune.train                          # chạy thật (3 epoch)
+```
+
+| Tham số | Mặc định | Ý nghĩa |
+|---|---|---|
+| `--epochs` | 3 | Số lượt qua dữ liệu |
+| `--batch-size` / `--grad-accum` | 4 / 4 | Batch hiệu dụng 16; giảm `--batch-size` nếu hết VRAM |
+| `--lr` | 1e-4 | Learning rate của LoRA |
+| `--rank` | 32 | Hạng LoRA (`alpha = 2 x rank`) |
+| `--decoder-only` | tắt | Chỉ học decoder: nhanh hơn, nhưng không học thêm "cách nghe" |
+| `--limit` | không | Chỉ dùng N lượt train (để chạy thử) |
+
+Quy trình: chia train/dev 90/10 **theo mẫu** (các lượt của một hội thoại
+không bị tách sang hai phía), đo WER dev của model gốc, học LoRA, đo WER dev
+sau mỗi epoch và giữ adapter tốt nhất. Cuối cùng gộp adapter vào trọng số
+gốc và lưu vào `checkpoints/asr/phowhisper-large-zac/` (đã nằm trong
+`.gitignore`). Nếu không epoch nào tốt hơn model gốc thì không lưu gì.
+
+### Bước 3: Đánh giá và sử dụng
+
+```bash
+python -m src.asr.finetune.evaluate      # so WER dev: gốc và fine-tune
+```
+
+Nếu model fine-tune tốt hơn, dùng nó trong pipeline bằng
+`model="phowhisper_large_zac"`, hoặc đổi `DEFAULT_MODEL` trong `config.py`.
+
+WER trong phần này chỉ chuẩn hoá đơn giản (viết thường, bỏ dấu câu), nên con
+số không so trực tiếp được với bảng benchmark ở mục 6. Hãy so **gốc và fine-tune
+trên cùng tập dev**.
+
+## 9. Cấu trúc thư mục
 
 ```text
 src/asr/
@@ -257,17 +318,24 @@ src/asr/
 ├── audio_io.py             # đọc file WAV 16 kHz
 ├── config.py               # danh sách model, đường dẫn dữ liệu
 ├── demo.py                 # python -m src.asr.demo
+├── finetune/               # fine-tune PhoWhisper bằng LoRA (mục 8)
+│   ├── check_weights.py    # kiểm tra weights khớp kiến trúc Whisper
+│   ├── train.py            # học LoRA, chọn epoch tốt nhất, gộp và lưu
+│   ├── evaluate.py         # so WER dev qua đúng đường chạy của pipeline
+│   ├── data.py             # lượt nói có nhãn, chia train/dev, tạo batch
+│   └── model.py            # nạp model, gắn LoRA, nhận dạng, WER
 ├── requirements.txt        # môi trường mặc định (PhoWhisper/Whisper/Nemotron)
 ├── requirements-qwen.txt   # môi trường riêng cho Qwen3-ASR
 ├── tests/
 │   ├── conftest.py
-│   └── test_api.py         # pytest src/asr/tests
+│   ├── test_api.py         # pytest src/asr/tests
+│   └── test_finetune.py
 └── README.md
 ```
 
 ---
 
-## 9. Xử lý lỗi thường gặp
+## 10. Xử lý lỗi thường gặp
 
 | Lỗi | Nguyên nhân và cách xử lý |
 |---|---|
@@ -277,4 +345,5 @@ src/asr/
 | `ValueError: Không suy ra được split ...` | Id có tiền tố lạ (private test). Truyền `split=...` |
 | Lần đầu chạy tải khoảng 3 GB | Bình thường. Lần sau dùng cache; đặt `HF_HOME` nếu muốn lưu ở ổ khác |
 | Mỗi mẫu mất vài chục giây | Đang chạy trên CPU. Kiểm tra `python -c "import torch; print(torch.cuda.is_available())"` |
+| `CUDA out of memory` khi fine-tune | Giảm `--batch-size` (2 hoặc 1) và tăng `--grad-accum` cho batch hiệu dụng không đổi; hoặc thêm `--decoder-only` |
 | Cảnh báo `Redirects are currently not supported in Windows` | Cảnh báo vô hại của PyTorch trên Windows, bỏ qua được |

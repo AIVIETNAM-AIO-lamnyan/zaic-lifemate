@@ -7,4 +7,6 @@ soundfile>=0.12
 transformers>=5.13    # AutoModelForRNNT (Nemotron) cần >= 5.13
 accelerate>=1.0
 librosa>=0.10         # bộ trích đặc trưng của Nemotron ASR
+peft>=0.13            # LoRA, chỉ cần khi fine-tune (src/asr/finetune)
+jiwer>=3.0            # tính WER khi fine-tune / đánh giá
 pytest>=8.0           # chạy test của module
