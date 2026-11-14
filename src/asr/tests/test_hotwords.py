@@ -1,11 +1,10 @@
-"""Kiểm thử hotword theo mẫu và việc truyền hotword vào backend."""
+"""Kiểm thử hotword lấy từ lịch sử hội thoại và việc truyền vào backend."""
 
 from __future__ import annotations
 
-import json
-
 from src.asr import api
-from src.asr.hotwords import build_hotwords, read_state, spoken_forms
+from src.asr.hotwords import (assistant_names, reply_phrases, spoken_forms,
+                              turn_hotwords)
 
 from test_api import FakeBackend, data_root  # noqa: F401  (fixture)
 
@@ -17,17 +16,32 @@ def test_spoken_forms():
     assert spoken_forms("điều hoà") == ["ĐIỀU HÒA"]
 
 
-def test_build_hotwords_fields_and_addresses():
+def test_reply_phrases_skip_sentence_start():
+    """Lấy cụm viết hoa giữa câu và mã chữ + số; bỏ từ đầu câu, giờ."""
+    phrases = reply_phrases("Đã nhắn Kevin Tran. Tàu SE7 chạy lúc 06:15.")
+    assert phrases == {"Kevin Tran", "SE7"}
+
+
+def test_assistant_names_from_tool_results():
     """Chỉ lấy trường tên; địa chỉ tách theo dấu phẩy; bỏ chuỗi quá dài."""
-    state = {"contacts": [{"name": "Chị Thu", "phone": "0901234567"}],
-             "places": [{"address": "88 Láng Hạ, Đống Đa"}],
-             "notes": [{"content": "không phải tên"}],
-             "music": [{"title": "x" * 80}]}
-    phrases = set(build_hotwords(state).split("/"))
-    assert {"CHỊ THU", "ĐỐNG ĐA"} <= phrases
-    assert "TÁM TÁM LÁNG HẠ" in phrases or "TÁM MƯƠI TÁM LÁNG HẠ" in phrases
-    assert not any("KHÔNG PHẢI" in p for p in phrases)
-    assert not any(p.startswith("XXX") for p in phrases)
+    turn = {"role": "assistant", "text": "",
+            "tool_results": [{"ok": True, "items": [
+                {"name": "Chị Thu", "phone": "0901234567"},
+                {"address": "88 Láng Hạ, Đống Đa"},
+                {"content": "không phải tên"},
+                {"title": "x" * 80}]}]}
+    assert assistant_names(turn) == {"Chị Thu", "88 Láng Hạ", "Đống Đa"}
+
+
+def test_turn_hotwords_only_use_earlier_turns():
+    """Lượt thứ k chỉ thấy các lượt assistant đứng trước nó."""
+    sample = {"history": [
+        {"role": "user"},
+        {"role": "assistant", "text": "Kênh VTV3 đang chiếu phim.",
+         "tool_results": []},
+        {"role": "user"}]}
+    assert turn_hotwords(sample) == [None, "VTV BA", "VTV BA"]
+    assert turn_hotwords({"history": []}) == [None]
 
 
 class HotwordFakeBackend(FakeBackend):
@@ -41,13 +55,8 @@ class HotwordFakeBackend(FakeBackend):
         return super().transcribe_batch(batch)
 
 
-def test_api_passes_hotwords(data_root, monkeypatch):  # noqa: F811
-    """state.json có thì truyền hotword; không có thì truyền None."""
-    env = data_root / "public_test" / "public_test_environment" / \
-        "public_0002"
-    env.mkdir(parents=True)
-    (env / "state.json").write_text(
-        json.dumps({"tv": {"channels": ["VTV3"]}}), encoding="utf-8")
+def test_api_passes_per_turn_hotwords(data_root, monkeypatch):  # noqa: F811
+    """Mỗi clip một hotword, lấy từ history; không đọc thư mục environment."""
     monkeypatch.setattr(api, "build_backend",
                         lambda spec, **kwargs: HotwordFakeBackend(spec))
     HotwordFakeBackend.received = []
@@ -55,5 +64,6 @@ def test_api_passes_hotwords(data_root, monkeypatch):  # noqa: F811
         "public_0002", data_root=data_root)
     api.get_user_request_from_audio("public_0005", data_root=data_root)
     assert (current, history) == ("utt9", ["utt1", "utt2"])
-    assert HotwordFakeBackend.received == ["VTV BA", None]
-    assert read_state(data_root / "public_test", "public_0005") is None
+    # Fixture: trợ lý chỉ trả lời "Đã bật đèn." -> không có tên nào.
+    assert HotwordFakeBackend.received == [[None, None, None], [None]]
+    assert not (data_root / "public_test" / "public_test_environment").exists()

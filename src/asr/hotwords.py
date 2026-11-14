@@ -1,14 +1,23 @@
-"""Hotword theo từng mẫu: tên trong ``state.json`` -> dạng chữ của Gipformer.
+"""Hotword theo từng lượt nói, lấy từ lịch sử hội thoại (đúng luật BTC).
 
-Mỗi mẫu của cuộc thi có ``<split>/<split>_environment/<id>/state.json`` liệt
-kê dữ liệu mà các tool sẽ trả về: danh bạ, bài hát, bến xe, mã cổ phiếu,
-tiêu đề lịch... Đó chính là những tên người dùng có thể nhắc tới. Đưa danh
-sách này cho bộ giải mã beam search của sherpa-onnx ("hotword") làm model ưu
-tiên các cụm từ đó.
+Luật cuộc thi cấm giải pháp đọc ``<split>_environment/`` (kể cả
+``state.json``), nên hotword chỉ lấy từ input hợp lệ trong ``<split>.jsonl``:
+**những gì trợ lý đã nói và đã tra cứu ở các lượt trước**. Người dùng hay
+nhắc lại đúng những tên đó ("nhắn cho Kevin Tran", "đặt vé tàu SE7"):
 
-Kết quả đo trên 200 hội thoại validation (``gipformer_finetune/DECISIONS.md``
-mục 12-14): tỉ lệ nghe đúng tên 85 % -> 91 %, WER 7,00 % -> 6,63 %, chỉ 2
-tên bị "bịa" trên 665 câu.
+* tên trong ``tool_results`` của các lượt assistant (các trường name, title,
+  location, stops, symbol...);
+* trong câu trả lời ``text`` của trợ lý: cụm từ viết hoa liền nhau không
+  đứng đầu câu ("Kevin Tran") và mã vừa chữ vừa số ("SE7", "VTV1").
+
+Lượt user thứ k chỉ dùng các lượt assistant **đứng trước** nó; lượt cuối dùng
+toàn bộ history. Lượt đầu tiên của hội thoại không có hotword.
+
+Kết quả (``gipformer_finetune/DECISIONS.md`` mục 15; điểm hotword chọn trên
+dev, đo một lần trên 200 hội thoại validation): WER 7,00 % (greedy) ->
+6,86 %, nghe đúng tên riêng 85,0 % -> 86,4 %, không tên nào bị "bịa". Thêm
+tên trong ``user_profile`` và mã trong tools catalog không giúp thêm, nên
+không dùng.
 
 Gipformer chỉ viết chữ HOA, không dấu câu, số bằng lời đọc, nên mỗi tên được
 đổi sang đúng dạng đó (cùng luật với lúc chuẩn bị nhãn fine-tune).
@@ -16,17 +25,15 @@ Gipformer chỉ viết chữ HOA, không dấu câu, số bằng lời đọc, n
 
 from __future__ import annotations
 
-import json
 import re
 import unicodedata
 from collections.abc import Iterator
-from pathlib import Path
 from typing import Any
 
 from .text_numbers import token_readings
 
-#: Các trường của state.json được coi là "tên" (mọi loại, kể cả tiêu đề
-#: lịch và nhãn báo thức).
+#: Các trường trong ``tool_results`` được coi là "tên" (mọi loại, kể cả
+#: tiêu đề lịch và nhãn báo thức).
 ENTITY_KEYS = frozenset({
     "name", "title", "location", "address", "members", "artist", "channels",
     "seller", "operator", "bank", "stop", "stops", "area", "venue", "label",
@@ -35,6 +42,12 @@ ENTITY_KEYS = frozenset({
 MAX_ENTITY_CHARS = 60
 #: Số cách đọc tối đa giữ cho mỗi tên có chữ số.
 MAX_VARIANTS = 4
+#: Số từ tối đa của một cụm viết hoa lấy từ câu trả lời của trợ lý.
+MAX_PHRASE_WORDS = 5
+#: Một từ (chữ, số, dấu + và gạch nối bên trong, vd. "S+", "Follow-up").
+_WORD = re.compile(r"[\w+]+(?:-\w+)*")
+#: Ranh giới câu: từ viết hoa ngay sau các dấu này chỉ là đầu câu.
+_SENTENCE_END = re.compile(r"[.!?:;\n]\s*$")
 
 # Ghép lại các cấu trúc số bị dấu câu chia cắt, theo thứ tự (giống luật
 # chuẩn bị nhãn khi fine-tune).
@@ -100,23 +113,68 @@ def _strings(node: Any, key: str | None = None
         yield key, node
 
 
-def build_hotwords(state: dict[str, Any]) -> str:
-    """Chuỗi hotword cho sherpa-onnx: các cụm cách nhau bởi ``/``.
+def _is_code(word: str) -> bool:
+    """Mã vừa chữ vừa số ("SE7", "VTV1"), không phải số / giờ thuần."""
+    return (any(c.isdigit() for c in word)
+            and any(c.isalpha() for c in word))
+
+
+def reply_phrases(text: str) -> set[str]:
+    """Cụm viết hoa (không đầu câu) và mã chữ + số trong câu trả lời.
+
+    Một cụm là các từ viết hoa chữ cái đầu đứng liền nhau; từ đầu câu bị bỏ
+    vì viết hoa theo ngữ pháp chứ không phải vì là tên.
+    """
+    phrases: set[str] = set()
+    current: list[str] = []
+    for match in _WORD.finditer(text):
+        word = match.group()
+        sentence_start = (match.start() == 0 or bool(
+            _SENTENCE_END.search(text[:match.start()])))
+        if _is_code(word):
+            phrases.add(word)
+        if word[0].isupper() and not sentence_start:
+            current.append(word)
+            continue
+        if current:
+            phrases.add(" ".join(current[:MAX_PHRASE_WORDS]))
+        current = []
+    if current:
+        phrases.add(" ".join(current[:MAX_PHRASE_WORDS]))
+    return phrases
+
+
+def assistant_names(turn: dict[str, Any]) -> set[str]:
+    """Mọi tên một lượt assistant để lại: ``tool_results`` + câu trả lời.
 
     Địa chỉ dài được tách theo dấu phẩy (hiếm khi đọc nguyên địa chỉ).
     """
     names = {part.strip()
-             for key, value in _strings(state)
+             for key, value in _strings(turn.get("tool_results", []))
              if key in ENTITY_KEYS and len(value) <= MAX_ENTITY_CHARS
              for part in value.split(",") if part.strip()}
-    phrases = {form for name in names for form in spoken_forms(name)}
-    return "/".join(sorted(phrases))
+    return names | reply_phrases(turn.get("text") or "")
 
 
-def read_state(split_dir: Path, sample_id: str) -> dict[str, Any] | None:
-    """``state.json`` của một mẫu, hoặc ``None`` nếu không có."""
-    path = (split_dir / f"{split_dir.name}_environment" / sample_id
-            / "state.json")
-    if not path.is_file():
-        return None
-    return json.loads(path.read_text(encoding="utf-8"))
+def to_hotword_string(names: set[str]) -> str:
+    """Tập tên -> chuỗi hotword cho sherpa-onnx (các cụm cách nhau ``/``)."""
+    return "/".join(sorted({form for name in names
+                            for form in spoken_forms(name)}))
+
+
+def turn_hotwords(sample: dict[str, Any]) -> list[str | None]:
+    """Hotword cho từng lượt user của một mẫu, theo thứ tự giải mã.
+
+    Returns:
+        Một phần tử cho mỗi lượt ``user`` trong history (cũ nhất trước) rồi
+        một phần tử cho yêu cầu cuối; ``None`` khi chưa có tên nào.
+    """
+    seen: set[str] = set()
+    out: list[str | None] = []
+    for turn in sample.get("history", []):
+        if turn.get("role") == "user":
+            out.append(to_hotword_string(seen) or None)
+        elif turn.get("role") == "assistant":
+            seen |= assistant_names(turn)
+    out.append(to_hotword_string(seen) or None)
+    return out

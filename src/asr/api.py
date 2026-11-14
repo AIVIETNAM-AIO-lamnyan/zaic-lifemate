@@ -20,10 +20,10 @@ Các lựa chọn thiết kế:
   định Gipformer chỉ viết chữ HOA, không dấu câu, số bằng lời đọc ("ba giờ
   chiều"); backend của nó trả text viết thường (đội Datyth thấy chữ thường
   giúp agent, còn đổi số về chữ số không giúp gì).
-* **Hotword theo từng mẫu** (chỉ backend hỗ trợ, như Gipformer): các tên
-  trong ``<split>_environment/<id>/state.json`` được đưa cho bộ giải mã để
-  ưu tiên (xem ``hotwords.py``). Thiếu ``state.json`` thì giải mã bình
-  thường, không lỗi.
+* **Hotword theo từng lượt** (chỉ backend hỗ trợ, như Gipformer): các tên
+  trợ lý đã nói / đã tra cứu ở các lượt *trước* trong ``history`` được đưa
+  cho bộ giải mã để ưu tiên (xem ``hotwords.py``). Không bao giờ đọc
+  ``<split>_environment/`` (luật BTC cấm).
 """
 
 from __future__ import annotations
@@ -36,7 +36,7 @@ from typing import Any
 from .audio_io import load_audio
 from .backends import ASRBackend, build_backend
 from .config import DATA_ROOT, DEFAULT_MODEL, MODELS
-from .hotwords import build_hotwords, read_state
+from .hotwords import turn_hotwords
 
 #: Tiền tố của id mẫu -> tên thư mục split.
 _SPLIT_BY_PREFIX = {"train": "train", "public": "public_test"}
@@ -190,9 +190,10 @@ def get_user_request_from_audio(sample_id: str, split: str | None = None,
     clips = [load_audio(path) for path in (*history_paths, final_path)]
     backend = load_asr_model(model, device)
     if backend.supports_hotwords:
-        state = read_state(_split_dir(sample_id, split, data_root), sample_id)
-        hotwords = build_hotwords(state) if state else None
-        texts = backend.transcribe_batch(clips, hotwords=hotwords)
+        split_dir = _split_dir(sample_id, split, data_root)
+        sample = get_sample(sample_id, split_dir.name, split_dir.parent)
+        texts = backend.transcribe_batch(clips,
+                                         hotwords=turn_hotwords(sample))
     else:
         texts = backend.transcribe_batch(clips)
     return texts[-1], texts[:-1]

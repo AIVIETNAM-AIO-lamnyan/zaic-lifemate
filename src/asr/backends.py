@@ -225,11 +225,18 @@ class SherpaOnnxBackend(ASRBackend):
             modeling_unit="bpe", bpe_vocab=str(vocab), provider="cpu")
 
     def transcribe_batch(self, batch: list[np.ndarray],
-                         hotwords: str | None = None) -> list[str]:
-        """Giải mã cả batch trong một lần gọi; trả text viết thường."""
+                         hotwords: str | list[str | None] | None = None
+                         ) -> list[str]:
+        """Giải mã cả batch trong một lần gọi; trả text viết thường.
+
+        ``hotwords``: một chuỗi dùng chung cho cả batch, hoặc một danh sách
+        (mỗi clip một chuỗi hay ``None``).
+        """
+        if hotwords is None or isinstance(hotwords, str):
+            hotwords = [hotwords] * len(batch)
         streams = []
-        for clip in batch:
-            stream = self.model.create_stream(hotwords=hotwords or None)
+        for clip, words in zip(batch, hotwords):
+            stream = self.model.create_stream(hotwords=words or None)
             stream.accept_waveform(self.sample_rate,
                                    np.ascontiguousarray(clip, np.float32))
             streams.append(stream)

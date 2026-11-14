@@ -2,10 +2,11 @@
 
 Model mặc định là **Gipformer 1.5 (68M, Zipformer RNN-T) đã fine-tune** trên
 tập train (``gipformer_finetune``, cấu hình ft06: nhiễu trắng + SpecAugment),
-giải mã beam search 4 + hotword theo mẫu, chạy ONNX trên CPU. Trên 200 hội
-thoại validation (không dùng để train): WER 6,63 % (Gipformer gốc 14,1 %,
-PhoWhisper-large ~25 %), nghe đúng 91 % tên riêng. Các model còn lại được giữ
-trong ``MODELS`` để có thể đổi model chỉ bằng một tham số, ví dụ
+giải mã beam search 4 + hotword lấy từ lịch sử hội thoại, chạy ONNX trên
+CPU. Trên 200 hội thoại validation (không dùng để train): WER 6,86 %
+(Gipformer gốc 14,1 %, PhoWhisper-large ~25 %), nghe đúng 86 % tên riêng.
+Các model còn lại được giữ trong ``MODELS`` để có thể đổi model chỉ bằng
+một tham số, ví dụ
 ``model="phowhisper_large"``.
 """
 
@@ -79,11 +80,12 @@ class ModelSpec:
 
 # Danh sách model đã benchmark.
 _SPECS = (
-    # Gipformer fine-tune: beam search 4 + hotword (điểm 1,5), 4 luồng CPU.
+    # Gipformer fine-tune: beam search 4 + hotword (điểm 1,0, chọn trên dev),
+    # 4 luồng CPU.
     # Cấu hình chọn trên validation (gipformer_finetune/DECISIONS.md mục 14).
     ModelSpec("gipformer_zac", GIPFORMER_MODEL, "sherpa_onnx", batch_size=32,
               options={"decoding_method": "modified_beam_search",
-                       "max_active_paths": 4, "hotwords_score": 1.5,
+                       "max_active_paths": 4, "hotwords_score": 1.0,
                        "num_threads": 4}),
     # PhoWhisper chỉ được fine-tune trên tiếng Việt: không cần gợi ý ngôn ngữ.
     ModelSpec("phowhisper_large", "vinai/PhoWhisper-large", "hf_whisper"),
