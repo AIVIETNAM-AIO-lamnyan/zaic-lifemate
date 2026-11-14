@@ -44,7 +44,7 @@ Model là một thư mục ONNX (~280 MB): `encoder.onnx`, `decoder.onnx`,
 
   ```bash
   hf auth login                                          # dán token HF
-  export ZAC_GIPFORMER_MODEL=<hf_user>/gipformer1.5-zac-ft06
+  export ZAC_GIPFORMER_MODEL=daycuachuoithucan/gipformer1.5-zac-ft06
   ```
 
 - **Thư mục trên máy:** đặt model vào
