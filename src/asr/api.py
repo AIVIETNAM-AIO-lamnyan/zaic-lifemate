@@ -16,10 +16,14 @@ Các lựa chọn thiết kế:
   hàm chạy giống nhau trên train, public_test và private test.
 * **Mọi lượt nói của một mẫu được nhận dạng trong một lần gọi model** (một
   batch), nhanh hơn gọi riêng từng file.
-* **Text trả về là output thô của model** (chỉ bỏ khoảng trắng thừa). Bước
-  chuẩn hoá dùng khi tính WER (viết thường, đổi số thành chữ...) cố ý không
-  áp dụng: LLM trích tham số tool từ "500 nghìn" chính xác hơn từ
-  "năm trăm nghìn".
+* **Text trả về là output của model** (bỏ khoảng trắng thừa). Model mặc
+  định Gipformer chỉ viết chữ HOA, không dấu câu, số bằng lời đọc ("ba giờ
+  chiều"); backend của nó trả text viết thường (đội Datyth thấy chữ thường
+  giúp agent, còn đổi số về chữ số không giúp gì).
+* **Hotword theo từng mẫu** (chỉ backend hỗ trợ, như Gipformer): các tên
+  trong ``<split>_environment/<id>/state.json`` được đưa cho bộ giải mã để
+  ưu tiên (xem ``hotwords.py``). Thiếu ``state.json`` thì giải mã bình
+  thường, không lỗi.
 """
 
 from __future__ import annotations
@@ -32,6 +36,7 @@ from typing import Any
 from .audio_io import load_audio
 from .backends import ASRBackend, build_backend
 from .config import DATA_ROOT, DEFAULT_MODEL, MODELS
+from .hotwords import build_hotwords, read_state
 
 #: Tiền tố của id mẫu -> tên thư mục split.
 _SPLIT_BY_PREFIX = {"train": "train", "public": "public_test"}
@@ -168,7 +173,7 @@ def get_user_request_from_audio(sample_id: str, split: str | None = None,
         split: Thư mục split (``train``, ``public_test``...). Bỏ trống thì
             suy ra từ tiền tố id; bắt buộc truyền với private test.
         data_root: Thư mục chứa các split. Mặc định ``config.DATA_ROOT``.
-        model: Khoá model ASR (mặc định PhoWhisper-large).
+        model: Khoá model ASR (mặc định ``gipformer_zac``).
         device: ``auto``, ``cuda:0`` hoặc ``cpu``.
 
     Returns:
@@ -183,5 +188,11 @@ def get_user_request_from_audio(sample_id: str, split: str | None = None,
     # Ghép history và yêu cầu cuối thành một batch: một lần gọi model duy
     # nhất cho cả mẫu. Yêu cầu cuối luôn nằm ở vị trí cuối cùng.
     clips = [load_audio(path) for path in (*history_paths, final_path)]
-    texts = load_asr_model(model, device).transcribe_batch(clips)
+    backend = load_asr_model(model, device)
+    if backend.supports_hotwords:
+        state = read_state(_split_dir(sample_id, split, data_root), sample_id)
+        hotwords = build_hotwords(state) if state else None
+        texts = backend.transcribe_batch(clips, hotwords=hotwords)
+    else:
+        texts = backend.transcribe_batch(clips)
     return texts[-1], texts[:-1]

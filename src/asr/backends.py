@@ -8,6 +8,7 @@ backend         model                       thư viện
 ``hf_whisper``  Whisper, PhoWhisper         ``transformers`` pipeline
 ``hf_rnnt``     NVIDIA Nemotron ASR         ``transformers`` (RNN-T)
 ``qwen_asr``    Qwen3-ASR                   ``qwen-asr``
+``sherpa_onnx`` Gipformer (Zipformer RNN-T) ``sherpa-onnx`` (CPU)
 ==============  ==========================  ===========================
 
 Tất cả được giấu sau lớp :class:`ASRBackend` với hợp đồng đơn giản:
@@ -22,6 +23,7 @@ from __future__ import annotations
 
 import gc
 from abc import ABC, abstractmethod
+from pathlib import Path
 from typing import Any
 
 import numpy as np
@@ -69,6 +71,9 @@ class ASRBackend(ABC):
         self.dtype = resolve_dtype(dtype, self.device)
         self.sample_rate = sample_rate
         self.model: Any = None   # được gán trong load()
+
+    #: Backend có nhận hotword theo từng mẫu không (xem ``hotwords.py``).
+    supports_hotwords: bool = False
 
     @abstractmethod
     def load(self) -> None:
@@ -167,11 +172,91 @@ class QwenASRBackend(ASRBackend):
         return [result.text.strip() for result in results]
 
 
+class SherpaOnnxBackend(ASRBackend):
+    """Gipformer (Zipformer RNN-T) đã fine-tune, chạy ONNX trên CPU.
+
+    Model là thư mục chứa ``encoder.onnx``, ``decoder.onnx``,
+    ``joiner.onnx``, ``tokens.txt``, ``bpe.model``. ``spec.model_id`` là
+    đường dẫn thư mục đó, hoặc id một repo Hugging Face (tải về lần đầu, repo
+    riêng tư cần ``HF_TOKEN`` hoặc ``hf auth login``).
+
+    Giải mã modified beam search; nếu được truyền hotword, mỗi đoạn âm thanh
+    trong batch dùng chung danh sách hotword của mẫu. Text trả về viết
+    thường (Gipformer chỉ viết chữ HOA, không dấu câu, số bằng lời đọc).
+    """
+
+    supports_hotwords = True
+
+    def __init__(self, spec: ModelSpec, device: str = "cpu",
+                 dtype: str = "float32",
+                 sample_rate: int = SAMPLE_RATE) -> None:
+        # Không gọi lớp cha: sherpa-onnx không cần torch để chọn thiết bị.
+        self.spec = spec
+        self.device, self.dtype = "cpu", "float32"
+        self.sample_rate = sample_rate
+        self.model: Any = None
+
+    def _model_dir(self) -> Path:
+        """Thư mục model trên máy (tải từ Hugging Face nếu cần)."""
+        local = Path(self.spec.model_id).expanduser()
+        if local.is_dir():
+            return local
+        from huggingface_hub import snapshot_download
+        return Path(snapshot_download(self.spec.model_id))
+
+    def load(self) -> None:
+        """Tạo ``OfflineRecognizer`` của sherpa-onnx."""
+        import sherpa_onnx
+        folder, options = self._model_dir(), self.spec.options
+        vocab = folder / "bpe.vocab"
+        if not vocab.is_file():
+            _write_bpe_vocab(folder / "bpe.model", vocab)
+        self.model = sherpa_onnx.OfflineRecognizer.from_transducer(
+            encoder=str(folder / "encoder.onnx"),
+            decoder=str(folder / "decoder.onnx"),
+            joiner=str(folder / "joiner.onnx"),
+            tokens=str(folder / "tokens.txt"),
+            num_threads=options.get("num_threads", 4),
+            sample_rate=self.sample_rate, feature_dim=80,
+            decoding_method=options.get("decoding_method",
+                                        "modified_beam_search"),
+            max_active_paths=options.get("max_active_paths", 4),
+            hotwords_score=options.get("hotwords_score", 1.5),
+            modeling_unit="bpe", bpe_vocab=str(vocab), provider="cpu")
+
+    def transcribe_batch(self, batch: list[np.ndarray],
+                         hotwords: str | None = None) -> list[str]:
+        """Giải mã cả batch trong một lần gọi; trả text viết thường."""
+        streams = []
+        for clip in batch:
+            stream = self.model.create_stream(hotwords=hotwords or None)
+            stream.accept_waveform(self.sample_rate,
+                                   np.ascontiguousarray(clip, np.float32))
+            streams.append(stream)
+        self.model.decode_streams(streams)
+        return [stream.result.text.strip().lower() for stream in streams]
+
+    def unload(self) -> None:
+        """Giải phóng recognizer (không dùng GPU)."""
+        self.model = None
+        gc.collect()
+
+
+def _write_bpe_vocab(bpe_model: Path, out: Path) -> None:
+    """Xuất ``bpe.vocab`` (mảnh BPE + điểm) mà hotword của sherpa-onnx cần."""
+    import sentencepiece as spm
+    sp = spm.SentencePieceProcessor(model_file=str(bpe_model))
+    out.write_text("\n".join(f"{sp.id_to_piece(i)}\t{sp.get_score(i)}"
+                             for i in range(sp.get_piece_size())) + "\n",
+                   encoding="utf-8")
+
+
 #: Ánh xạ trường ``backend`` của ``ModelSpec`` sang lớp wrapper tương ứng.
 BACKENDS: dict[str, type[ASRBackend]] = {
     "hf_whisper": HFWhisperBackend,
     "hf_rnnt": HFRNNTBackend,
     "qwen_asr": QwenASRBackend,
+    "sherpa_onnx": SherpaOnnxBackend,
 }
 
 
