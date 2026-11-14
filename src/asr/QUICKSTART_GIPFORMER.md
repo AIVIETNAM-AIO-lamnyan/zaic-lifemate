@@ -94,3 +94,23 @@ trên tập train (bỏ 200 hội thoại validation), 3 epoch, AdamW 2e-5 warmu
 cosine, nhiễu trắng (SNR 10-30 dB, 30 %) + SpecAugment; xuất ONNX bằng icefall.
 Giải mã: modified beam search 4, hotword từ lịch sử hội thoại, điểm 1,0 (chọn trên dev). Code train và nhật ký mọi
 thí nghiệm nằm ở repo cá nhân `gipformer_finetune` (`DECISIONS.md`).
+
+## 7. Tự kiểm tra kết quả trên máy mình
+
+Chạy đúng hàm của module trên 200 hội thoại validation cố định (mã mẫu ở
+`validation_ids.txt`, đều thuộc tập train nên có transcript gốc):
+
+```bash
+python -m src.asr.evaluate                 # CPU, khoảng 4-8 phút
+```
+
+- Với model **ft06** phải ra **WER ≈ 6,86 %** (lệch tối đa 0,05 điểm). Lệch
+  nhiều hơn: kiểm tra lại đường dẫn model (`ZAC_GIPFORMER_MODEL`), phiên bản
+  `sherpa-onnx` trong `requirements-sherpa.txt`, dữ liệu train.
+- Với model **bản cuối** (đã học cả 200 hội thoại này) WER sẽ thấp hơn
+  nhiều; con số đó KHÔNG phản ánh chất lượng thật trên test.
+- Đây là thước đo gần nhất mình có. WER trên public / private test gần như
+  chắc chắn **cao hơn**: test có nhiều tên riêng và người dùng chưa từng xuất
+  hiện trong train.
+- Kết quả ghi vào `results/asr/` (trong `.gitignore`, chứa transcript dữ
+  liệu thi: không commit).
