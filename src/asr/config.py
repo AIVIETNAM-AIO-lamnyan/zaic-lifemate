@@ -1,7 +1,9 @@
 """Cấu hình của module ASR: danh sách model và đường dẫn dữ liệu.
 
-Model mặc định là **Gipformer 1.5 (68M, Zipformer RNN-T) đã fine-tune** trên
-tập train (``gipformer_finetune``, cấu hình ft06: nhiễu trắng + SpecAugment),
+Model mặc định là **Gipformer 1.5 (68M, Zipformer RNN-T) đã fine-tune**
+(``gipformer_finetune``): bản nộp ``gipformer1.5-zac-final`` học toàn bộ
+dữ liệu train (dropout + nhiễu trắng + SpecAugment, trung bình 2 seed). Số
+đo dưới đây là của bản ft06 (chỉ học phần train, dùng để kiểm tra),
 giải mã beam search 4 + hotword lấy từ lịch sử hội thoại, chạy ONNX trên
 CPU, rồi hậu xử lý số đọc tắt (``postprocess.py``). Trên 200 hội thoại
 validation (không dùng để train): WER 6,75 % (6,86 % trước hậu xử lý;
@@ -52,7 +54,7 @@ FINETUNED_DIR = Path(os.environ.get(
 # ZAC_GIPFORMER_MODEL.
 GIPFORMER_MODEL = os.environ.get(
     "ZAC_GIPFORMER_MODEL",
-    str(PROJECT_ROOT / "checkpoints" / "asr" / "gipformer1.5-zac-ft06"))
+    str(PROJECT_ROOT / "checkpoints" / "asr" / "gipformer1.5-zac-final"))
 
 
 @dataclass(frozen=True)
