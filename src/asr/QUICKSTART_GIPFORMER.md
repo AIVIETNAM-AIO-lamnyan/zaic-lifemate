@@ -104,7 +104,8 @@ Chạy đúng hàm của module trên 200 hội thoại validation cố định 
 python -m src.asr.evaluate                 # CPU, khoảng 4-8 phút
 ```
 
-- Với model **ft06** phải ra **WER ≈ 6,86 %** (lệch tối đa 0,05 điểm). Lệch
+- Với model **ft06** phải ra **WER ≈ 6,75 %** (lệch tối đa 0,05 điểm; 6,86 %
+  là số trước khi thêm hậu xử lý `postprocess.py`). Lệch
   nhiều hơn: kiểm tra lại đường dẫn model (`ZAC_GIPFORMER_MODEL`), phiên bản
   `sherpa-onnx` trong `requirements-sherpa.txt`, dữ liệu train.
 - Với model **bản cuối** (đã học cả 200 hội thoại này) WER sẽ thấp hơn

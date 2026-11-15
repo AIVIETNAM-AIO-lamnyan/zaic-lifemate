@@ -5,9 +5,10 @@ lịch sử hội thoại) trên **200 hội thoại validation cố định** c
 (``validation_ids.txt``, 665 lượt nói), rồi tính WER theo thang "team"
 (``scoring.py``) so với transcript gốc ``audio_text``.
 
-Số mong đợi với model ft06 (``gipformer1.5-zac-ft06``, mặc định cũ):
-**WER 6,86 %**. Lệch quá 0,05 điểm nghĩa là có gì đó khác với lúc đo (model,
-phiên bản sherpa-onnx, cách lấy hotword...) và cần kiểm tra trước khi dùng.
+Số mong đợi với model ft06 (``gipformer1.5-zac-ft06``) + hậu xử lý
+``postprocess.py``: **WER 6,75 %** (6,86 % khi chưa có hậu xử lý). Lệch
+quá 0,05 điểm nghĩa là có gì đó khác với lúc đo (model, phiên bản
+sherpa-onnx, cách lấy hotword...) và cần kiểm tra trước khi dùng.
 
 ``--compare <csv>`` (tuỳ chọn): so từng câu với transcript của script đánh
 giá gốc (``utt_id,hypothesis``, chữ HOA); báo tỉ lệ câu trùng khít, mong đợi
@@ -42,7 +43,7 @@ from .scoring import edit_distance, normalize_team
 #: Danh sách 200 hội thoại validation (mã mẫu, không chứa dữ liệu thi).
 IDS_FILE = Path(__file__).with_name("validation_ids.txt")
 #: WER mong đợi (%) với model ft06 và sai lệch cho phép (điểm).
-EXPECTED_WER, TOLERANCE = 6.86, 0.05
+EXPECTED_WER, TOLERANCE = 6.75, 0.05
 
 
 def read_ids(path: Path = IDS_FILE) -> list[str]:

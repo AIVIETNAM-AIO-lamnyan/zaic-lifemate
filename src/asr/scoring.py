@@ -3,7 +3,7 @@
 Chép nguyên từ ``gipformer_finetune/src/gft/scoring.py`` (vốn trùng khớp
 10.072/10.072 câu với ``normalize_team`` của bộ benchmark lam_lai_cuoc_doi
 và tái hiện hàm ``render`` của repo Datyth), để con số đội tự chạy được so
-trực tiếp với con số trong báo cáo (6,86 % trên 200 hội thoại validation).
+trực tiếp với con số trong báo cáo (6,75 % trên 200 hội thoại validation).
 Không sửa riêng file này: mọi thay đổi phải làm ở cả hai nơi.
 """
 

@@ -3,8 +3,9 @@
 Model mặc định là **Gipformer 1.5 (68M, Zipformer RNN-T) đã fine-tune** trên
 tập train (``gipformer_finetune``, cấu hình ft06: nhiễu trắng + SpecAugment),
 giải mã beam search 4 + hotword lấy từ lịch sử hội thoại, chạy ONNX trên
-CPU. Trên 200 hội thoại validation (không dùng để train): WER 6,86 %
-(Gipformer gốc 14,1 %, PhoWhisper-large ~25 %), nghe đúng 86 % tên riêng.
+CPU, rồi hậu xử lý số đọc tắt (``postprocess.py``). Trên 200 hội thoại
+validation (không dùng để train): WER 6,75 % (6,86 % trước hậu xử lý;
+Gipformer gốc 14,1 %, PhoWhisper-large ~25 %), nghe đúng 86 % tên riêng.
 Các model còn lại được giữ trong ``MODELS`` để có thể đổi model chỉ bằng
 một tham số, ví dụ
 ``model="phowhisper_large"``.

@@ -20,6 +20,8 @@ Các lựa chọn thiết kế:
   định Gipformer chỉ viết chữ HOA, không dấu câu, số bằng lời đọc ("ba giờ
   chiều"); backend của nó trả text viết thường (đội Datyth thấy chữ thường
   giúp agent, còn đổi số về chữ số không giúp gì).
+* **Hậu xử lý nhẹ** (``postprocess.py``): khôi phục chữ "mươi" trong số đọc
+  tắt ("chín lăm" -> "chín mươi lăm").
 * **Hotword theo từng lượt** (chỉ backend hỗ trợ, như Gipformer): các tên
   trợ lý đã nói / đã tra cứu ở các lượt *trước* trong ``history`` được đưa
   cho bộ giải mã để ưu tiên (xem ``hotwords.py``). Không bao giờ đọc
@@ -37,6 +39,7 @@ from .audio_io import load_audio
 from .backends import ASRBackend, build_backend
 from .config import DATA_ROOT, DEFAULT_MODEL, MODELS
 from .hotwords import turn_hotwords
+from .postprocess import postprocess
 
 #: Tiền tố của id mẫu -> tên thư mục split.
 _SPLIT_BY_PREFIX = {"train": "train", "public": "public_test"}
@@ -196,4 +199,6 @@ def get_user_request_from_audio(sample_id: str, split: str | None = None,
                                          hotwords=turn_hotwords(sample))
     else:
         texts = backend.transcribe_batch(clips)
+    # Hậu xử lý nhẹ (vd. "chín lăm" -> "chín mươi lăm"), xem postprocess.py.
+    texts = [postprocess(text) for text in texts]
     return texts[-1], texts[:-1]
