@@ -5,7 +5,9 @@ Format mỗi dòng trong file .jsonl:
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
+import tempfile
 from typing import Any, Dict, List, Optional, Union
 
 
@@ -70,6 +72,40 @@ def save_submission_sample(
         f.write(json.dumps(entry, ensure_ascii=False) + "\n")
 
     return entry
+
+
+def append_json_array(
+    output_file: Union[str, Path],
+    entries: List[Dict[str, Any]],
+) -> None:
+    """Append records to an existing JSON array while keeping the file valid JSON."""
+    path = Path(output_file)
+    path.parent.mkdir(parents=True, exist_ok=True)
+
+    existing: List[Dict[str, Any]] = []
+    if path.exists():
+        loaded = json.loads(path.read_text(encoding="utf-8"))
+        if not isinstance(loaded, list):
+            raise ValueError(f"Expected a JSON array in result file: {path}")
+        existing = loaded
+
+    temporary_path: Optional[Path] = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            mode="w",
+            encoding="utf-8",
+            dir=path.parent,
+            prefix=f".{path.name}.",
+            suffix=".tmp",
+            delete=False,
+        ) as temporary_file:
+            temporary_path = Path(temporary_file.name)
+            json.dump(existing + entries, temporary_file, ensure_ascii=False, indent=2)
+            temporary_file.write("\n")
+        os.replace(temporary_path, path)
+    finally:
+        if temporary_path is not None and temporary_path.exists():
+            temporary_path.unlink()
 
 
 class SubmissionWriter:

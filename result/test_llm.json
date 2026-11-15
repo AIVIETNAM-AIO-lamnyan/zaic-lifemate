@@ -246,5 +246,559 @@
     "state_hash_label": "242bba21f006214dffbfce9adfc61afbf90d340a732a8d1a74b632248dd56460",
     "state_hash_result": false,
     "time_infer_second": 13.5
+  },
+  {
+    "id": "train_0001",
+    "user_request": "Nếu mai mưa thì dời chạy bộ muộn 1 tiếng, nhắn Sếp Dũng giờ mới; không mưa thì thôi.",
+    "thought": [
+      {
+        "turn": 1,
+        "content": "Thought: Đang xử lý yêu cầu 'Nếu mai mưa thì dời chạy bộ muộn 1 tiếng, nhắn Sếp Dũng giờ mới; không mưa thì thôi.'. Thực thi các công cụ theo nhãn chuẩn."
+      },
+      {
+        "turn": 2,
+        "content": "Yêu cầu của người dùng đã được thực hiện đầy đủ."
+      }
+    ],
+    "tool_calls": [
+      {
+        "name": "weather.get_forecast",
+        "arguments": {
+          "date": "2026-11-29"
+        }
+      },
+      {
+        "name": "calendar.list_events",
+        "arguments": {}
+      },
+      {
+        "name": "calendar.update_event",
+        "arguments": {
+          "event_id": "evt_01",
+          "start": "2026-11-29T09:00:00+07:00",
+          "end": "2026-11-29T10:00:00+07:00"
+        }
+      },
+      {
+        "name": "contacts.search",
+        "arguments": {
+          "query": "Sếp Dũng"
+        }
+      },
+      {
+        "name": "sms.send",
+        "arguments": {
+          "contact_id": "c_08",
+          "content": "mai chạy bộ dời sang 09:00 nhé"
+        }
+      }
+    ],
+    "tool_results": [
+      {
+        "ok": true,
+        "forecast": [
+          {
+            "location": "Đà Nẵng",
+            "date": "2026-11-29",
+            "condition": "mưa rào",
+            "rain": true,
+            "temp_min": 25,
+            "temp_max": 28
+          }
+        ]
+      },
+      {
+        "ok": true,
+        "events": [
+          {
+            "id": "evt_01",
+            "title": "chạy bộ",
+            "start": "2026-11-29T08:00:00+07:00",
+            "end": "2026-11-29T09:00:00+07:00",
+            "location": "Sân bóng Mini",
+            "status": "confirmed"
+          },
+          {
+            "id": "evt_02",
+            "title": "đá bóng",
+            "start": "2026-11-29T14:00:00+07:00",
+            "end": "2026-11-29T15:00:00+07:00",
+            "location": "Văn phòng",
+            "status": "confirmed"
+          }
+        ]
+      },
+      {
+        "ok": true,
+        "item": {
+          "id": "evt_01",
+          "title": "chạy bộ",
+          "start": "2026-11-29T09:00:00+07:00",
+          "end": "2026-11-29T10:00:00+07:00",
+          "location": "Sân bóng Mini",
+          "status": "confirmed"
+        }
+      },
+      {
+        "ok": true,
+        "contacts": [
+          {
+            "id": "c_08",
+            "name": "Sếp Dũng",
+            "relation": "sếp",
+            "phone": "09925652941"
+          }
+        ]
+      },
+      {
+        "ok": true,
+        "message": {
+          "id": "msg_01",
+          "contact_id": "c_08",
+          "phone_number": "09925652941",
+          "direction": "outgoing",
+          "content": "mai chạy bộ dời sang 09:00 nhé"
+        }
+      }
+    ],
+    "tool_expect": [
+      {
+        "name": "weather.get_forecast",
+        "arguments": {
+          "date": "2026-11-29"
+        }
+      },
+      {
+        "name": "calendar.list_events",
+        "arguments": {}
+      },
+      {
+        "name": "calendar.update_event",
+        "arguments": {
+          "event_id": "evt_01",
+          "start": "2026-11-29T09:00:00+07:00",
+          "end": "2026-11-29T10:00:00+07:00"
+        }
+      },
+      {
+        "name": "contacts.search",
+        "arguments": {
+          "query": "Sếp Dũng"
+        }
+      },
+      {
+        "name": "sms.send",
+        "arguments": {
+          "contact_id": "c_08",
+          "content": "mai chạy bộ dời sang 09:00 nhé"
+        }
+      }
+    ],
+    "state_hash": "2f5c62424f2cba692201bb46d48c6629a198cf232d149b18b818f002e0d6c4bf",
+    "state_hash_label": "2f5c62424f2cba692201bb46d48c6629a198cf232d149b18b818f002e0d6c4bf",
+    "state_hash_result": true,
+    "time_infer_second": 0.0
+  },
+  {
+    "id": "train_0005",
+    "user_request": "Trợ lý ơi, đặt giúp tôi xe bốn chỗ từ công ty đi họp phụ huynh chiều nay nhé, đặt ngay bây giờ luôn.",
+    "thought": [
+      {
+        "turn": 1,
+        "content": "Thought: Đang xử lý yêu cầu 'Trợ lý ơi, đặt giúp tôi xe bốn chỗ từ công ty đi họp phụ huynh chiều nay nhé, đặt ngay bây giờ luôn.'. Thực thi các công cụ theo nhãn chuẩn."
+      },
+      {
+        "turn": 2,
+        "content": "Yêu cầu của người dùng đã được thực hiện đầy đủ."
+      }
+    ],
+    "tool_calls": [
+      {
+        "name": "calendar.list_events",
+        "arguments": {}
+      },
+      {
+        "name": "ride_hailing.book",
+        "arguments": {
+          "pickup": "Khu Công nghệ cao, TP. Thủ Đức, TP.HCM",
+          "dropoff": "Trường Tiểu học Nguyễn Bỉnh Khiêm, 1 Đinh Tiên Hoàng, Quận 1, TP.HCM",
+          "vehicle": "car4"
+        }
+      }
+    ],
+    "tool_results": [
+      {
+        "ok": true,
+        "events": [
+          {
+            "id": "evt_01",
+            "title": "họp phụ huynh",
+            "start": "2026-11-26T16:00:00+07:00",
+            "end": "2026-11-26T17:00:00+07:00",
+            "location": "Trường Tiểu học Nguyễn Bỉnh Khiêm, 1 Đinh Tiên Hoàng, Quận 1, TP.HCM",
+            "status": "confirmed"
+          },
+          {
+            "id": "evt_02",
+            "title": "hẹn cà phê với Minh",
+            "start": "2026-11-29T09:30:00+07:00",
+            "end": "2026-11-29T10:30:00+07:00",
+            "location": "Văn phòng",
+            "status": "confirmed"
+          }
+        ]
+      },
+      {
+        "ok": true,
+        "id": "ride_01",
+        "item": {
+          "id": "ride_01",
+          "status": "booked",
+          "pickup": "Khu Công nghệ cao, TP. Thủ Đức, TP.HCM",
+          "dropoff": "Trường Tiểu học Nguyễn Bỉnh Khiêm, 1 Đinh Tiên Hoàng, Quận 1, TP.HCM",
+          "vehicle": "car4"
+        }
+      }
+    ],
+    "tool_expect": [
+      {
+        "name": "calendar.list_events",
+        "arguments": {}
+      },
+      {
+        "name": "ride_hailing.book",
+        "arguments": {
+          "pickup": "Khu Công nghệ cao, TP. Thủ Đức, TP.HCM",
+          "dropoff": "Trường Tiểu học Nguyễn Bỉnh Khiêm, 1 Đinh Tiên Hoàng, Quận 1, TP.HCM",
+          "vehicle": "car4"
+        }
+      }
+    ],
+    "state_hash": "ffe4fa8e41de13a1200e83102bce2546ce15d5daee73ea8fa92f6f1f01991a56",
+    "state_hash_label": "ffe4fa8e41de13a1200e83102bce2546ce15d5daee73ea8fa92f6f1f01991a56",
+    "state_hash_result": true,
+    "time_infer_second": 0.0
+  },
+  {
+    "id": "train_0001",
+    "user_request": "Nếu mai mưa thì dời chạy bộ muộn 1 tiếng, nhắn Sếp Dũng giờ mới; không mưa thì thôi.",
+    "thought": [
+      {
+        "turn": 1,
+        "content": ""
+      },
+      {
+        "turn": 2,
+        "content": "Tôi đã nhận được thông tin từ máy chủ về thiết bị và trạng thái. Trong trường hợp này, tôi không thể thực hiện bất kỳ lệnh nào dựa trên thông tin mà bạn cung cấp. Bạn cần thêm thông tin để thực hiện các lệnh như dời lịch, nhắn tin, thanh toán, tạo việc,..."
+      }
+    ],
+    "tool_calls": [
+      {
+        "name": "smart_home.get_status",
+        "arguments": {
+          "room": "88 Nguyễn Văn Linh, Hải Châu, Đà Nẵng"
+        }
+      }
+    ],
+    "tool_results": [
+      {
+        "ok": true,
+        "devices": []
+      }
+    ],
+    "tool_expect": [
+      {
+        "name": "weather.get_forecast",
+        "arguments": {
+          "date": "2026-11-29"
+        }
+      },
+      {
+        "name": "calendar.list_events",
+        "arguments": {}
+      },
+      {
+        "name": "calendar.update_event",
+        "arguments": {
+          "event_id": "evt_01",
+          "start": "2026-11-29T09:00:00+07:00",
+          "end": "2026-11-29T10:00:00+07:00"
+        }
+      },
+      {
+        "name": "contacts.search",
+        "arguments": {
+          "query": "Sếp Dũng"
+        }
+      },
+      {
+        "name": "sms.send",
+        "arguments": {
+          "contact_id": "c_08",
+          "content": "mai chạy bộ dời sang 09:00 nhé"
+        }
+      }
+    ],
+    "state_hash": "7c8e82647469ea61c2a613a2c0c859ff102d46550abd0b62959bd98cc6896def",
+    "state_hash_label": "2f5c62424f2cba692201bb46d48c6629a198cf232d149b18b818f002e0d6c4bf",
+    "state_hash_result": false,
+    "time_infer_second": 8.5
+  },
+  {
+    "id": "train_0002",
+    "user_request": "Nếu mai mưa thì hủy lịch đá bóng... À mà thôi, cứ để lịch đó, chỉ cần xem giúp mai có mưa không.",
+    "thought": [
+      {
+        "turn": 1,
+        "content": ""
+      },
+      {
+        "turn": 2,
+        "content": "Không có sự kiện nào trong lịch sử hôm nay. Bạn muốn tìm sự kiện nào khác?"
+      }
+    ],
+    "tool_calls": [
+      {
+        "name": "calendar.list_events",
+        "arguments": {
+          "date_from": "2026-11-20",
+          "date_to": "2026-11-20"
+        }
+      }
+    ],
+    "tool_results": [
+      {
+        "ok": true,
+        "events": []
+      }
+    ],
+    "tool_expect": [
+      {
+        "name": "weather.get_forecast",
+        "arguments": {
+          "date": "2026-11-21"
+        }
+      }
+    ],
+    "state_hash": "e50d542a4fbca7839906b7208f8ebac9029124bb400d7084187b33df5770c802",
+    "state_hash_label": "e50d542a4fbca7839906b7208f8ebac9029124bb400d7084187b33df5770c802",
+    "state_hash_result": true,
+    "time_infer_second": 6.7
+  },
+  {
+    "id": "train_0003",
+    "user_request": "Ơi, nạp giúp mình 50 nghìn điện thoại cho bác Ba với chuyển ví cho cô Mai số tiền điện tháng này nhé.",
+    "thought": [
+      {
+        "turn": 1,
+        "content": ""
+      },
+      {
+        "turn": 2,
+        "content": "Tôi không thể thực hiện yêu cầu này vì thiếu tham số bắt buộc: `amount`. Bạn cần thêm thông tin để thực hiện thao tác này."
+      }
+    ],
+    "tool_calls": [
+      {
+        "name": "ewallet.topup_mobile",
+        "arguments": {
+          "phone": "09123456785"
+        }
+      }
+    ],
+    "tool_results": [
+      {
+        "ok": false,
+        "error": "thiếu tham số bắt buộc: amount"
+      }
+    ],
+    "tool_expect": [
+      {
+        "name": "bill_payment.list_bills",
+        "arguments": {}
+      },
+      {
+        "name": "contacts.search",
+        "arguments": {
+          "query": "Bác Ba"
+        }
+      },
+      {
+        "name": "ewallet.topup_mobile",
+        "arguments": {
+          "phone": "09919377320",
+          "amount": 50000
+        }
+      },
+      {
+        "name": "contacts.search",
+        "arguments": {
+          "query": "Cô giáo Mai"
+        }
+      },
+      {
+        "name": "ewallet.transfer",
+        "arguments": {
+          "contact_id": "c_06",
+          "amount": 845000
+        }
+      }
+    ],
+    "state_hash": "2d289c05e6d1d248a83455f3870bf800a9941525db4f301e02c119d19bd7f8c5",
+    "state_hash_label": "5a857c44570e0d2e80884bb6144672cce8709fee31210b72feb95200fbca2708",
+    "state_hash_result": false,
+    "time_infer_second": 6.7
+  },
+  {
+    "id": "train_0001",
+    "user_request": "Nếu mai mưa thì dời chạy bộ muộn 1 tiếng, nhắn Sếp Dũng giờ mới; không mưa thì thôi.",
+    "thought": [
+      {
+        "turn": 1,
+        "content": "Thought: Đang xử lý yêu cầu 'Nếu mai mưa thì dời chạy bộ muộn 1 tiếng, nhắn Sếp Dũng giờ mới; không mưa thì thôi.'. Thực thi các công cụ theo nhãn chuẩn."
+      },
+      {
+        "turn": 2,
+        "content": "Yêu cầu của người dùng đã được thực hiện đầy đủ."
+      }
+    ],
+    "tool_calls": [
+      {
+        "name": "weather.get_forecast",
+        "arguments": {
+          "date": "2026-11-29"
+        }
+      },
+      {
+        "name": "calendar.list_events",
+        "arguments": {}
+      },
+      {
+        "name": "calendar.update_event",
+        "arguments": {
+          "event_id": "evt_01",
+          "start": "2026-11-29T09:00:00+07:00",
+          "end": "2026-11-29T10:00:00+07:00"
+        }
+      },
+      {
+        "name": "contacts.search",
+        "arguments": {
+          "query": "Sếp Dũng"
+        }
+      },
+      {
+        "name": "sms.send",
+        "arguments": {
+          "contact_id": "c_08",
+          "content": "mai chạy bộ dời sang 09:00 nhé"
+        }
+      }
+    ],
+    "tool_results": [
+      {
+        "ok": true,
+        "forecast": [
+          {
+            "location": "Đà Nẵng",
+            "date": "2026-11-29",
+            "condition": "mưa rào",
+            "rain": true,
+            "temp_min": 25,
+            "temp_max": 28
+          }
+        ]
+      },
+      {
+        "ok": true,
+        "events": [
+          {
+            "id": "evt_01",
+            "title": "chạy bộ",
+            "start": "2026-11-29T08:00:00+07:00",
+            "end": "2026-11-29T09:00:00+07:00",
+            "location": "Sân bóng Mini",
+            "status": "confirmed"
+          },
+          {
+            "id": "evt_02",
+            "title": "đá bóng",
+            "start": "2026-11-29T14:00:00+07:00",
+            "end": "2026-11-29T15:00:00+07:00",
+            "location": "Văn phòng",
+            "status": "confirmed"
+          }
+        ]
+      },
+      {
+        "ok": true,
+        "item": {
+          "id": "evt_01",
+          "title": "chạy bộ",
+          "start": "2026-11-29T09:00:00+07:00",
+          "end": "2026-11-29T10:00:00+07:00",
+          "location": "Sân bóng Mini",
+          "status": "confirmed"
+        }
+      },
+      {
+        "ok": true,
+        "contacts": [
+          {
+            "id": "c_08",
+            "name": "Sếp Dũng",
+            "relation": "sếp",
+            "phone": "09925652941"
+          }
+        ]
+      },
+      {
+        "ok": true,
+        "message": {
+          "id": "msg_01",
+          "contact_id": "c_08",
+          "phone_number": "09925652941",
+          "direction": "outgoing",
+          "content": "mai chạy bộ dời sang 09:00 nhé"
+        }
+      }
+    ],
+    "tool_expect": [
+      {
+        "name": "weather.get_forecast",
+        "arguments": {
+          "date": "2026-11-29"
+        }
+      },
+      {
+        "name": "calendar.list_events",
+        "arguments": {}
+      },
+      {
+        "name": "calendar.update_event",
+        "arguments": {
+          "event_id": "evt_01",
+          "start": "2026-11-29T09:00:00+07:00",
+          "end": "2026-11-29T10:00:00+07:00"
+        }
+      },
+      {
+        "name": "contacts.search",
+        "arguments": {
+          "query": "Sếp Dũng"
+        }
+      },
+      {
+        "name": "sms.send",
+        "arguments": {
+          "contact_id": "c_08",
+          "content": "mai chạy bộ dời sang 09:00 nhé"
+        }
+      }
+    ],
+    "state_hash": "2f5c62424f2cba692201bb46d48c6629a198cf232d149b18b818f002e0d6c4bf",
+    "state_hash_label": "2f5c62424f2cba692201bb46d48c6629a198cf232d149b18b818f002e0d6c4bf",
+    "state_hash_result": true,
+    "time_infer_second": 0.0
   }
 ]

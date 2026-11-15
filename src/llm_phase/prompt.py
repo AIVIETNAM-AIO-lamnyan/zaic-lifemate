@@ -95,13 +95,13 @@ def create_user_message(
 
     content = f"""{context_str}
 
-    ### LỊCH SỬ HỘI THOẠI TRƯỚC ĐÓ:
-    {history_text}
+### LỊCH SỬ HỘI THOẠI TRƯỚC ĐÓ:
+{history_text}
 
-    ### YÊU CẦU MỚI NHẤT CỦA NGƯỜI DÙNG:
-    "{audio_text}"
+### YÊU CẦU MỚI NHẤT CỦA NGƯỜI DÙNG:
+"{audio_text}"
 
-    Dựa trên bối cảnh thời gian thực, thông tin cá nhân và yêu cầu của người dùng ở trên, hãy phân tích và đưa ra công cụ (tool call) tiếp theo cần thực thi."""
+Dựa trên bối cảnh thời gian thực, thông tin cá nhân và yêu cầu của người dùng ở trên, hãy phân tích và đưa ra công cụ (tool call) tiếp theo cần thực thi."""
 
     return {"role": "user", "content": content}
 
