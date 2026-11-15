@@ -39,11 +39,11 @@ CONFIG_MODEL_ID="${CONFIG_VALUES[0]}"
 CONFIG_MAX_CONTEXT_LENGTH="${CONFIG_VALUES[1]}"
 CONFIG_PORT="${CONFIG_VALUES[2]}"
 
-MODEL_PATH="${VLLM_MODEL_PATH:-Qwen/Qwen2.5-0.5B-Instruct}"
+PRIMARY_MODEL="${VLLM_MODEL_PATH:-Qwen/Qwen3.5-4B}"
+FALLBACK_MODEL="${VLLM_FALLBACK_MODEL_PATH:-Qwen/Qwen2.5-0.5B-Instruct}"
 SERVED_MODEL_NAME="${VLLM_SERVED_MODEL_NAME:-$CONFIG_MODEL_ID}"
 PORT="${VLLM_PORT:-$CONFIG_PORT}"
 MAX_MODEL_LEN="${VLLM_MAX_MODEL_LEN:-16384}"
-GPU_MEMORY_UTILIZATION="${VLLM_GPU_MEMORY_UTILIZATION:-0.50}"
 MAX_NUM_SEQS="${VLLM_MAX_NUM_SEQS:-1}"
 
 if (( MAX_MODEL_LEN > CONFIG_MAX_CONTEXT_LENGTH )); then
@@ -51,18 +51,68 @@ if (( MAX_MODEL_LEN > CONFIG_MAX_CONTEXT_LENGTH )); then
   MAX_MODEL_LEN="$CONFIG_MAX_CONTEXT_LENGTH"
 fi
 
-echo "Model source: $MODEL_PATH"
-echo "Served name:  $SERVED_MODEL_NAME"
-echo "Endpoint:     http://localhost:$PORT/v1/chat/completions"
-echo "Context:      $MAX_MODEL_LEN (config limit: $CONFIG_MAX_CONTEXT_LENGTH)"
+run_vllm() {
+  local model_path="$1"
+  local lower
+  lower="$(printf '%s' "$model_path" | tr '[:upper:]' '[:lower:]')"
 
-exec "$CONDA_EXE" run --no-capture-output -n "$CONDA_ENV" vllm serve "$MODEL_PATH" \
-  --served-model-name "$SERVED_MODEL_NAME" \
-  --host "${VLLM_HOST:-0.0.0.0}" \
-  --port "$PORT" \
-  --max-model-len "$MAX_MODEL_LEN" \
-  --gpu-memory-utilization "$GPU_MEMORY_UTILIZATION" \
-  --max-num-seqs "$MAX_NUM_SEQS" \
-  --enable-auto-tool-choice \
-  --tool-call-parser hermes \
-  --enforce-eager
+  # Qwen3.5 cần trust-remote-code + parser qwen3_coder; các model Qwen cũ dùng hermes.
+  local parser_args=(--tool-call-parser hermes)
+  if [[ "$lower" == *qwen3.5* || "$lower" == *qwen3-coder* ]]; then
+    parser_args=(--trust-remote-code --tool-call-parser qwen3_coder)
+  fi
+
+  # Model 4B cần nhiều VRAM hơn model 0.5B.
+  local gpu_util="${VLLM_GPU_MEMORY_UTILIZATION:-}"
+  if [[ -z "$gpu_util" ]]; then
+    if [[ "$lower" == *0.5b* || "$lower" == *0_5b* ]]; then
+      gpu_util="0.50"
+    else
+      gpu_util="0.90"
+    fi
+  fi
+
+  echo "Model source: $model_path"
+  echo "Served name:  $SERVED_MODEL_NAME"
+  echo "Endpoint:     http://localhost:$PORT/v1/chat/completions"
+  echo "Context:      $MAX_MODEL_LEN (config limit: $CONFIG_MAX_CONTEXT_LENGTH)"
+  echo "Parser:       ${parser_args[*]} | gpu-memory-utilization: $gpu_util"
+
+  "$CONDA_EXE" run --no-capture-output -n "$CONDA_ENV" vllm serve "$model_path" \
+    --served-model-name "$SERVED_MODEL_NAME" \
+    --host "${VLLM_HOST:-0.0.0.0}" \
+    --port "$PORT" \
+    --max-model-len "$MAX_MODEL_LEN" \
+    --gpu-memory-utilization "$gpu_util" \
+    --max-num-seqs "$MAX_NUM_SEQS" \
+    --enable-auto-tool-choice \
+    "${parser_args[@]}" \
+    --enforce-eager
+}
+
+# VLLM_NO_FALLBACK=1 để tắt fallback (ví dụ khi muốn thấy lỗi thật của model chính).
+FALLBACK_ENABLED=1
+if [[ "${VLLM_NO_FALLBACK:-0}" == "1" || "$PRIMARY_MODEL" == "$FALLBACK_MODEL" ]]; then
+  FALLBACK_ENABLED=0
+fi
+
+set +e
+run_vllm "$PRIMARY_MODEL"
+STATUS=$?
+set -e
+
+if (( STATUS == 0 || STATUS == 130 || STATUS == 143 )); then
+  exit "$STATUS"
+fi
+
+if (( FALLBACK_ENABLED == 0 )); then
+  echo "Model '$PRIMARY_MODEL' thoát với mã $STATUS; fallback đang tắt." >&2
+  exit "$STATUS"
+fi
+
+echo "" >&2
+echo "Model '$PRIMARY_MODEL' không chạy được (exit $STATUS)." >&2
+echo "Chuyển sang model dự phòng '$FALLBACK_MODEL'..." >&2
+echo "" >&2
+
+run_vllm "$FALLBACK_MODEL"

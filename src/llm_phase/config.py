@@ -49,8 +49,14 @@ MAX_TURNS: int = 10
 # Số token sinh tối đa cho mỗi lượt phản hồi của LLM
 MAX_TOKENS: int = 512
 
-# Tên mô hình LLM mục tiêu
+# Tên mô hình LLM mục tiêu (Qwen3.5-4B, serve qua vLLM với --served-model-name)
 MODEL_ID: str = os.environ.get("MODEL_NAME", os.environ.get("MODEL_ID", "qwen3.5:4b"))
+
+# Tên mô hình dự phòng: dùng khi endpoint báo không có MODEL_ID (HTTP 404).
+# Mặc định là model ban đầu Qwen/Qwen2.5-0.5B-Instruct.
+FALLBACK_MODEL_ID: str = os.environ.get(
+    "FALLBACK_MODEL_NAME", os.environ.get("FALLBACK_MODEL_ID", "Qwen/Qwen2.5-0.5B-Instruct")
+)
 
 # Endpoint URL của vLLM (OpenAI-compatible Chat Completions)
 DEFAULT_VLLM_URL: str = os.environ.get(

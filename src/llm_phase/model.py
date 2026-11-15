@@ -10,6 +10,7 @@ from typing import Any, Dict, Optional
 from .config import (
     DEFAULT_API_KEY,
     DEFAULT_VLLM_URL,
+    FALLBACK_MODEL_ID,
     MAX_CONTEXT_LENGTH,
     MAX_TOKENS,
     MODEL_ID,
@@ -24,6 +25,7 @@ class ModelConfig:
     
     Attributes:
         name: Tên/ID model (mặc định lấy từ config.MODEL_ID = 'qwen3.5:4b').
+        fallback_name: Tên model dự phòng khi endpoint không có `name` (404).
         endpoint_url: URL API endpoint gửi request (mặc định vLLM Chat Completions).
         temperature: Nhiệt độ sinh (mặc định 0.0 theo chuẩn ZAC 2026).
         max_context_length: Context length tối đa (2^14 = 16384 tokens).
@@ -34,6 +36,7 @@ class ModelConfig:
         extra_options: Tùy chọn bổ sung cho payload nếu cần.
     """
     name: str = MODEL_ID
+    fallback_name: str = FALLBACK_MODEL_ID
     endpoint_url: str = DEFAULT_VLLM_URL
     temperature: float = TEMPERATURE
     max_context_length: int = MAX_CONTEXT_LENGTH
@@ -47,11 +50,16 @@ class ModelConfig:
     def from_env(cls) -> "ModelConfig":
         """Tải cấu hình model từ các biến môi trường hoặc dùng giá trị mặc định từ config."""
         model_name = os.environ.get("MODEL_NAME", os.environ.get("MODEL_ID", MODEL_ID))
+        fallback_name = os.environ.get(
+            "FALLBACK_MODEL_NAME",
+            os.environ.get("FALLBACK_MODEL_ID", FALLBACK_MODEL_ID),
+        )
         endpoint = os.environ.get("VLLM_URL", os.environ.get("LLM_ENDPOINT", DEFAULT_VLLM_URL))
         api_key = os.environ.get("VLLM_API_KEY", DEFAULT_API_KEY)
         timeout = int(os.environ.get("LLM_TIMEOUT", str(REQUEST_TIMEOUT)))
         return cls(
             name=model_name,
+            fallback_name=fallback_name,
             endpoint_url=endpoint,
             temperature=TEMPERATURE,
             max_context_length=MAX_CONTEXT_LENGTH,

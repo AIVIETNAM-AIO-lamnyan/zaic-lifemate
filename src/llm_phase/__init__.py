@@ -8,6 +8,7 @@ from .config import (
     DEFAULT_API_KEY,
     DEFAULT_SUBMISSION_PATH,
     DEFAULT_VLLM_URL,
+    FALLBACK_MODEL_ID,
     MAX_CONTEXT_LENGTH,
     MAX_TOKENS,
     MAX_TURNS,
@@ -26,6 +27,7 @@ from .prompt import (
 )
 from .get_tool import get_available_tool, get_catalog
 from .llm import (
+    ModelNotFoundError,
     build_request_payload,
     send_llm_request,
     parse_llm_response,
@@ -47,6 +49,7 @@ __all__ = [
     "MAX_TURNS",
     "MAX_TOKENS",
     "MODEL_ID",
+    "FALLBACK_MODEL_ID",
     "DEFAULT_VLLM_URL",
     "DEFAULT_API_KEY",
     "REQUEST_TIMEOUT",
@@ -64,6 +67,7 @@ __all__ = [
     "get_available_tool",
     "get_catalog",
     # LLM request & parse
+    "ModelNotFoundError",
     "build_request_payload",
     "send_llm_request",
     "parse_llm_response",
