@@ -61,7 +61,7 @@ unsloth_compiled_cache/
 
 # ===== Data / Models / Artifacts =====
 # Large dataset files (audio, models, etc.)
-saved_models/
+/finetune/
 *.wav
 *.mp3
 *.flac
@@ -76,6 +76,7 @@ saved_models/
 *.bin
 *.onnx
 *.safetensors
+!/saved_models/*.safetensors
 *.ckpt
 *.tar.gz
 *.zip

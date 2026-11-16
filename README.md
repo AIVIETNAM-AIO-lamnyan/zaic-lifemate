@@ -76,7 +76,7 @@ python -u training_code\finetune.py -N 16
 python -u training_code\finetune.py -N 128
 ```
 
-Mặc định model là `Qwen/Qwen2.5-0.5B-Instruct`; dataset và tool catalog lần lượt là `train+public_test\train\train.jsonl` và `train+public_test\train\train_tools_catalog.json`. Adapter, cấu hình và tokenizer được xuất vào `saved_models\` trong repo. Cần giữ base model tương ứng để nạp adapter khi suy luận.
+Mặc định model là `Qwen/Qwen2.5-0.5B-Instruct`; dataset và tool catalog lần lượt là `train+public_test\train\train.jsonl` và `train+public_test\train\train_tools_catalog.json`. Adapter, cấu hình và tokenizer được xuất vào `finetune\` trong repo; thư mục `saved_models\` được dành riêng để sử dụng sau và không bị ghi đè bởi lần fine-tune mặc định. Cần giữ base model tương ứng để nạp adapter khi suy luận.
 
 Các tham số thường dùng:
 
@@ -91,7 +91,7 @@ Các tham số thường dùng:
 | `--batch-size` | Batch size trên mỗi GPU | `1` |
 | `--gradient-accumulation-steps` | Số bước tích lũy gradient | `8` |
 | `--logging-steps` | Ghi log loss sau mỗi số bước optimizer này | `1` |
-| `--output-dir` | Thư mục xuất adapter và tokenizer | `saved_models\` |
+| `--output-dir` | Thư mục xuất adapter và tokenizer | `finetune\` |
 
 Ví dụ chỉ định rõ dataset, model, log mỗi bước và output:
 
@@ -102,7 +102,7 @@ python -u training_code\finetune.py `
   --catalog train+public_test\train\train_tools_catalog.json `
   --num-samples 128 `
   --logging-steps 1 `
-  --output-dir saved_models
+  --output-dir finetune
 ```
 
 ---

@@ -69,7 +69,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--output-dir",
         type=Path,
-        default=Path(os.environ.get("OUTPUT_DIR", PROJECT_ROOT / "saved_models")),
+        default=Path(os.environ.get("OUTPUT_DIR", PROJECT_ROOT / "finetune")),
         help="Directory for the final LoRA adapter and tokenizer.",
     )
     parser.add_argument(
