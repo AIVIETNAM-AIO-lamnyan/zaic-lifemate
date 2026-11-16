@@ -6,4 +6,8 @@ soundfile
 tqdm
 pyyaml
 rapidfuzz
-
+# ASR Gipformer (src/asr): giải mã ONNX trên CPU
+sherpa-onnx>=1.12
+sentencepiece>=0.2
+numpy>=1.26
+huggingface_hub>=0.24
