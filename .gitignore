@@ -49,6 +49,7 @@ coverage.xml
 *.py,cover
 .hypothesis/
 .pytest_cache/
+unsloth_compiled_cache/
 
 # Translations
 *.mo
@@ -60,6 +61,7 @@ coverage.xml
 
 # ===== Data / Models / Artifacts =====
 # Large dataset files (audio, models, etc.)
+/finetune/
 *.wav
 *.mp3
 *.flac
@@ -74,6 +76,7 @@ coverage.xml
 *.bin
 *.onnx
 *.safetensors
+!/saved_models/*.safetensors
 *.ckpt
 *.tar.gz
 *.zip
@@ -151,4 +154,16 @@ secrets.json
 *.bak
 *.orig
 .scratch/
+
+# ===== Jira Exports & Local Configs =====
+jira/
+*.csv
+
+# ===== Internal Workplan & Private Task Specs =====
+docs/
+
+# Keep the primary Dockerfile tracked; ignore task-specific variants.
+[Dd]ockerfile.*
+
+
 
