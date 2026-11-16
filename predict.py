@@ -41,54 +41,35 @@ ASK_TOOL = "sys.ask_missing_info"
 
 
 # ==============================================================================
-# KHỐI ASR (NHẬN DẠNG GIỌNG NÓI OFFLINE)
+# KHỐI ASR (NHẬN DẠNG GIỌNG NÓI OFFLINE): Gipformer fine-tune của src/asr
 # ==============================================================================
-class ASRModel:
-    def __init__(self, model_dir_or_name: str):
-        self.model_dir = model_dir_or_name
-        self.pipeline = None
+# Model ONNX (encoder/decoder/joiner.onnx, tokens.txt, bpe.model, bpe.vocab) đặt
+# sẵn trong image tại ASR_MODEL_DIR; chạy CPU, không cần GPU / torch. Biến môi
+# trường phải đặt TRƯỚC khi import src.asr (config đọc lúc import).
+os.environ.setdefault("ZAC_GIPFORMER_MODEL", ASR_MODEL_DIR)
+os.environ.setdefault("HF_HUB_OFFLINE", "1")
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from src.asr import get_user_request_from_audio, load_asr_model  # noqa: E402
 
-    def load(self):
-        if self.pipeline is not None:
-            return
-        try:
-            import torch
-            from transformers import pipeline
-            device = "cuda:0" if torch.cuda.is_available() else "cpu"
-            dtype = torch.bfloat16 if device.startswith("cuda") and torch.cuda.is_bf16_supported() else (
-                torch.float16 if device.startswith("cuda") else torch.float32
-            )
-            # Ưu tiên load từ thư mục offline saved_models
-            model_target = self.model_dir if Path(self.model_dir).is_dir() else "vinai/PhoWhisper-large"
-            self.pipeline = pipeline(
-                "automatic-speech-recognition",
-                model=model_target,
-                device=device,
-                torch_dtype=dtype,
-            )
-        except Exception as e:
-            print(f"[ASR Warning] Không thể khởi tạo ASR pipeline: {e}")
-
-    def transcribe(self, audio_path: str) -> str:
-        if not audio_path:
-            return ""
-        self.load()
-        if self.pipeline is None:
-            return ""
-        full_audio_path = ROOT / audio_path if not Path(audio_path).is_absolute() else Path(audio_path)
-        if not full_audio_path.is_file():
-            # Thử tìm trong split directory
-            alt = ROOT / SPLIT / audio_path
-            if alt.is_file():
-                full_audio_path = alt
-        try:
-            res = self.pipeline(str(full_audio_path), generate_kwargs={"num_beams": 1, "do_sample": False})
-            return res.get("text", "").strip()
-        except Exception:
-            return ""
+try:
+    load_asr_model()  # nạp một lần lúc khởi động
+except Exception as e:
+    print(f"[ASR Warning] Không nạp được model ASR: {e}")
 
 
-asr_engine = ASRModel(ASR_MODEL_DIR)
+def transcribe_sample(item):
+    """Chữ của mọi lượt user một mẫu: (current_req, history_req).
+
+    Cả mẫu giải mã trong một lần gọi, có hotword lấy từ lịch sử hội thoại
+    (không đọc <split>_environment/). Lỗi thì trả chuỗi rỗng để không làm
+    hỏng cả mẫu.
+    """
+    try:
+        return get_user_request_from_audio(item["id"], split=SPLIT,
+                                           data_root=ROOT)
+    except Exception as e:
+        print(f"[ASR Warning] {item.get('id')}: {e}")
+        return "", []
 
 
 # ==============================================================================
@@ -179,13 +160,19 @@ Nguyên tắc thực thi bắt buộc:
 
     messages = [{"role": "system", "content": system_prompt}]
 
+    # ASR cho cả mẫu (lượt cuối + mọi lượt user trong history), một lần gọi.
+    # audio_text chỉ có ở train; private / public test luôn đi qua ASR.
+    asr_current, asr_history = transcribe_sample(item)
+
     # Nạp lịch sử hội thoại
+    user_idx = 0
     for h in item.get("history", []):
         role = h.get("role")
         if role == "user":
             txt = h.get("audio_text")
-            if not txt and "audio" in h:
-                txt = asr_engine.transcribe(h["audio"])
+            if not txt:
+                txt = asr_history[user_idx] if user_idx < len(asr_history) else ""
+            user_idx += 1
             messages.append({"role": "user", "content": txt or ""})
         elif role == "assistant":
             msg = {"role": "assistant", "content": h.get("text", "")}
@@ -199,9 +186,7 @@ Nguyên tắc thực thi bắt buộc:
                 messages.append({"role": "tool", "content": res_str})
 
     # Lượt hiện tại
-    latest_text = item.get("audio_text")
-    if not latest_text and "audio" in item:
-        latest_text = asr_engine.transcribe(item["audio"])
+    latest_text = item.get("audio_text") or asr_current
     messages.append({"role": "user", "content": latest_text or ""})
 
     previous_calls = None

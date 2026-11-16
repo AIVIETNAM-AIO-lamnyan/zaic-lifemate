@@ -201,6 +201,13 @@ class SherpaOnnxBackend(ASRBackend):
         local = Path(self.spec.model_id).expanduser()
         if local.is_dir():
             return local
+        if local.is_absolute() or self.spec.model_id.startswith((".", "~")):
+            # Là đường dẫn máy nhưng chưa có model: báo rõ thay vì để
+            # huggingface_hub báo lỗi "Repo id must be in the form...".
+            raise FileNotFoundError(
+                f"Không thấy model ở {local}. Tải model về đó hoặc đặt biến "
+                "môi trường ZAC_GIPFORMER_MODEL (thư mục model hoặc id "
+                "Hugging Face), xem QUICKSTART_GIPFORMER.md.")
         from huggingface_hub import snapshot_download
         return Path(snapshot_download(self.spec.model_id))
 
