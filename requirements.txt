@@ -1,0 +1,9 @@
+jupyterlab
+torch
+transformers>=4.40.0
+accelerate
+soundfile
+tqdm
+pyyaml
+rapidfuzz
+
